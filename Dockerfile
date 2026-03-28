@@ -6,7 +6,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install all dependencies (torch CPU-only is pinned in requirements.txt)
+# Step 1: Install CPU-only PyTorch FIRST with --index-url (not --extra-index-url)
+# This prevents pip from later resolving the CUDA version from PyPI when
+# installing transformers, which would override this installation.
+RUN pip install --no-cache-dir \
+    torch==2.1.0 \
+    --index-url https://download.pytorch.org/whl/cpu
+
+# Step 2: Install remaining dependencies
+# torch is already present → pip won't reinstall it
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
