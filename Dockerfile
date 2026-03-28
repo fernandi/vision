@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install CPU-only PyTorch and immediately verify it imports correctly
 RUN pip install --no-cache-dir \
-    torch==2.4.0 \
+    torch==2.6.0 \
     --index-url https://download.pytorch.org/whl/cpu && \
     python -c "import torch; print('torch OK:', torch.__version__)"
 
