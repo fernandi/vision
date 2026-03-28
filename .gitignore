@@ -1,0 +1,11 @@
+data/images/
+data/faiss.index
+data/index_mapping.json
+data/metadata.json
+data/metadata.db
+venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+.DS_Store
+.env
