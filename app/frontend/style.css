@@ -1,6 +1,6 @@
 :root {
-    --bg-color: #cecdca;
-    --card-bg: #aaa;
+    --bg-color: #E3E3E3;
+    --card-bg: #ffffff;
     --text-color: #e0e0e0;
     --accent-color: #bb86fc;
     --secondary-text: #a0a0a0;
@@ -30,6 +30,7 @@ header {
     padding: 2rem 0;
     display: flex;
     justify-content: center;
+    min-height: 100svh;
 }
 
 /* Push content down to avoid overlap with fixed header */
@@ -53,23 +54,25 @@ h1 {
     justify-content: center;
     align-items: center;
     max-width: 1400px;
-    margin: 0 2rem;
+    margin: 0 10rem;
     position: relative;
     width: 100%;
 }
 
 #search-input {
     width: 100%;
-    padding: 1rem 1.5rem;
-    padding-right: 3.5rem;
-    border-radius: 1rem;
-    /* REMOVED ROUNDED CORNERS */
+    padding: 2rem 2.5rem;
+    padding-right: 5.5rem;
+    border-radius: 4REM;
     border: 0;
-    background-color: var(--card-bg);
-    color: white;
+    background-color: #ffffff;
+    color: black;
     font-size: 1.1rem;
     outline: none;
     transition: all 0.3s ease;
+    font-family: 'Inter', sans-serif;
+    text-transform: uppercase;
+    font-weight: 600;
 }
 
 #search-input:focus {
@@ -300,11 +303,23 @@ h1 {
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to   { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 @keyframes scaleIn {
-    from { transform: scale(0.9); opacity: 0; }
-    to   { transform: scale(1);   opacity: 1; }
+    from {
+        transform: scale(0.9);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
 }

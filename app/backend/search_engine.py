@@ -84,8 +84,24 @@ class VisualSearchEngine:
         env = os.environ.get("ENV", "local")
 
         print("Loading CLIP model...")
-        self.model = CLIPModel.from_pretrained(self.model_id).to(self.device)
+        self.model = CLIPModel.from_pretrained(self.model_id).to(self.device).eval()
         self.processor = CLIPProcessor.from_pretrained(self.model_id)
+
+        # Apply dynamic int8 quantization for ~2x speedup on CPU text encoding.
+        # Skip on MPS/CUDA (GPU is fast, quantization not supported there anyway).
+        if self.device == "cpu":
+            try:
+                import platform
+                backend = "fbgemm" if platform.machine() in ("x86_64", "AMD64") else "qnnpack"
+                torch.backends.quantized.engine = backend
+                self.model = torch.ao.quantization.quantize_dynamic(
+                    self.model, {torch.nn.Linear}, dtype=torch.qint8
+                )
+                print(f"  ✓ int8 quantization applied (backend={backend})")
+            except Exception as e:
+                print(f"  ⚠ int8 quantization failed, using float32: {e}")
+        else:
+            print(f"  ↷ int8 skipped (device={self.device})")
 
         if env == "production":
             self._download_from_hf()
