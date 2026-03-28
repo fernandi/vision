@@ -25,15 +25,21 @@ app.add_middleware(
 
 # Search Engine Instance
 search_engine = VisualSearchEngine()
+_load_lock = __import__("threading").Lock()
 
-@app.on_event("startup")
-async def startup_event():
-    try:
-        search_engine.load()
-    except Exception as e:
-        search_engine.load_error = str(e)
-        print(f"ERROR loading search engine: {e}")
-
+def ensure_loaded():
+    """Load the search engine lazily on first request."""
+    if search_engine.index is not None:
+        return
+    with _load_lock:
+        if search_engine.index is not None:
+            return
+        try:
+            search_engine.load()
+        except Exception as e:
+            search_engine.load_error = str(e)
+            print(f"ERROR loading search engine: {e}")
+            raise
 
 
 def get_image_url(item: dict) -> str:
@@ -92,6 +98,7 @@ def health_check():
 @app.post("/search")
 def search(req: SearchRequest):
     try:
+        ensure_loaded()
         results = search_engine.search(req.query, k=req.limit)
         for item in results:
             item["image_url"] = get_image_url(item)
