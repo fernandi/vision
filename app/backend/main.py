@@ -31,7 +31,9 @@ async def startup_event():
     try:
         search_engine.load()
     except Exception as e:
-        print(f"Error loading search engine: {e}")
+        search_engine.load_error = str(e)
+        print(f"ERROR loading search engine: {e}")
+
 
 
 def get_image_url(item: dict) -> str:
@@ -75,7 +77,17 @@ class SearchRequest(BaseModel):
 # Routes
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "env": ENV, "indexed": len(search_engine.metadata_mapping) or search_engine.index.ntotal if search_engine.index else 0}
+    n = 0
+    if search_engine.index:
+        n = search_engine.index.ntotal
+    elif search_engine.metadata_mapping:
+        n = len(search_engine.metadata_mapping)
+    return {
+        "status": "ok",
+        "env": ENV,
+        "indexed": n,
+        "load_error": search_engine.load_error,
+    }
 
 @app.post("/search")
 def search(req: SearchRequest):

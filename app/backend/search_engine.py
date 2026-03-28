@@ -27,8 +27,9 @@ class VisualSearchEngine:
         self.index = None
         self.db_conn = None
         self.db_columns = []
-        # Fallback: list used only if no SQLite db
         self.metadata_mapping = []
+        self.load_error = None  # exposed via /health for debugging
+
 
     def _download_from_hf(self):
         """Download FAISS index and metadata from HuggingFace Hub (production mode)."""
@@ -89,12 +90,13 @@ class VisualSearchEngine:
         if env == "production":
             self._download_from_hf()
 
-        print(f"Loading FAISS index (mmap) from {self.index_file}...")
+        print(f"Loading FAISS index from {self.index_file}...")
         if not os.path.exists(self.index_file):
             raise FileNotFoundError(f"Index not found at {self.index_file}. Run index_data.py first.")
 
-        # mmap: index is memory-mapped, not fully loaded into RAM
-        self.index = faiss.read_index(self.index_file, faiss.IO_FLAG_MMAP)
+        # Regular read (mmap can cause issues in some container environments)
+        self.index = faiss.read_index(self.index_file)
+
 
         self._load_metadata()
 
