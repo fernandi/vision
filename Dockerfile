@@ -20,5 +20,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy app code
 COPY . .
 
-# Railway injects $PORT at runtime
-CMD uvicorn app.backend.main:app --host 0.0.0.0 --port $PORT
+# Railway injects $PORT at runtime — use /bin/sh -c to expand it
+CMD ["/bin/sh", "-c", "uvicorn app.backend.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
