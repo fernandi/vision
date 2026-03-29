@@ -4,6 +4,7 @@
     --text-color: #e0e0e0;
     --accent-color: #bb86fc;
     --secondary-text: #a0a0a0;
+    --header-compact-h: 2.5rem;
 }
 
 * {
@@ -19,141 +20,162 @@ body {
     line-height: 1.6;
 }
 
+/* ── Header ──────────────────────────────────────────────────────────────── */
+/* Initial state: full-viewport hero, search bar centered */
 header {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100%;
+    right: 0;
+    height: 100vh;
     z-index: 1000;
     background-color: var(--bg-color);
-    /* Maintain background opaqueness */
-    padding: 2rem 0;
     display: flex;
-    justify-content: center;
-    min-height: 100svh;
-}
-
-/* Push content down to avoid overlap with fixed header */
-.container {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 2rem;
-    padding-top: 6rem;
-    /* Adjust based on header height */
-}
-
-h1 {
-    font-weight: 300;
-    font-size: 2.5rem;
-    margin-bottom: 2rem;
-    letter-spacing: 2px;
-}
-
-.search-container {
-    display: flex;
-    justify-content: center;
     align-items: center;
-    max-width: 1400px;
-    margin: 0 10rem;
-    position: relative;
-    width: 100%;
+    justify-content: center;
+    padding: 0 2rem;
+    transition: height 0.55s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.15s ease 0.5s;
 }
 
+/* Compact state: 64px fixed top bar */
+body.has-results header {
+    height: var(--header-compact-h);
+    padding: 0;
+}
+
+/* ── Search container ─────────────────────────────────────────────────────── */
+.search-container {
+    width: min(640px, 100%);
+    position: relative;
+    display: flex;
+    align-items: center;
+    transition: width 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body.has-results .search-container {
+    width: 100%;
+    max-width: none;
+}
+
+/* ── Search input ─────────────────────────────────────────────────────────── */
 #search-input {
     width: 100%;
-    padding: 2rem 2.5rem;
-    padding-right: 5.5rem;
-    border-radius: 4REM;
+    padding: 1.4rem 1.8rem;
+    padding-right: 3.5rem;
+    border-radius: 4rem;
     border: 0;
     background-color: #ffffff;
     color: black;
-    font-size: 1.1rem;
+    font-size: 1rem;
     outline: none;
-    transition: all 0.3s ease;
     font-family: 'Inter', sans-serif;
     text-transform: uppercase;
-    font-weight: 600;
+    font-weight: 500;
+    transition:
+        padding 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+        font-size 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+        background-color 0.15s ease,
+        color 0.15s ease 0.5s,
+        border-radius 0.5s ease 0.5s,
+        padding 0.15s ease;
 }
 
+/* Focused hero: invert to black */
 #search-input:focus {
-    border-color: var(--accent-color);
-    box-shadow: 0 0 0 2px rgba(187, 134, 252, 0.2);
+    background-color: #000;
+    color: white;
 }
 
+/* Focused compact: stay white */
+body.has-results #search-input:focus {
+    background-color: #fff;
+    color: black;
+}
+
+/* Compact input */
+body.has-results #search-input {
+    border-radius: 0;
+    padding: 0.6rem 1.8rem;
+}
+
+/* ── Search button ────────────────────────────────────────────────────────── */
 #search-btn {
     position: absolute;
-    right: 10px;
+    right: 1rem;
     background: none;
     border: none;
-    color: var(--secondary-text);
     cursor: pointer;
     padding: 5px;
+    color: var(--secondary-text);
+    transition: color 0.25s ease;
+}
+
+/* Button turns white when input is focused (black bg) */
+.search-container:focus-within #search-btn {
+    color: white;
 }
 
 #search-btn:hover {
     color: var(--accent-color);
 }
 
-.suggestions {
-    font-size: 0.9rem;
-    color: var(--secondary-text);
-}
-
-.suggestion-btn {
-    background: none;
-    border: 1px solid #333;
-    color: var(--secondary-text);
-    padding: 0.3rem 0.8rem;
-    border-radius: 0;
-    /* REMOVED ROUNDED CORNERS */
-    margin: 0 0.2rem;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.suggestion-btn:hover {
-    border-color: var(--accent-color);
-    color: var(--accent-color);
-}
-
-/* Gallery Grid */
+/* ── Gallery ──────────────────────────────────────────────────────────────── */
+/* Initially invisible, pushed below the full-height hero */
 .gallery {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
     gap: 2.5rem;
-    /* INCREASED GAP */
     min-height: 300px;
+    padding: 0 2.5rem 2rem;
+
+    /* Start invisible at the bottom of the 100vh hero */
+    margin-top: 100vh;
+    opacity: 0;
+    pointer-events: none;
+
+    transition:
+        margin-top .15s cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 0.15s 0.15s ease;
+    /* delay opacity so header collapses first */
 }
 
+/* After search: gallery slides into view below compact header */
+body.has-results .gallery {
+    margin-top: calc(var(--header-compact-h) + 1.5rem);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* ── Image cards ──────────────────────────────────────────────────────────── */
 .image-card {
     border-radius: 0;
-    /* REMOVED ROUNDED CORNERS */
-    overflow: hidden;
+    overflow: visible;
     transition: transform 0.3s ease;
     cursor: pointer;
     position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
 }
-
 
 .image-card img {
     width: 100%;
-    height: 300px;
-    /* CHANGED TO CONTAIN AS REQUESTED */
     object-fit: contain;
     background-color: transparent;
-    /* TRANSPARENT BACKGROUND */
     display: block;
+    max-height: 30rem;
 }
 
-
 .image-info {
-    padding: 1rem;
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
     opacity: 0;
     transition: opacity 0.3s;
+    height: 1px;
+    overflow: visible;
+    color: black;
+    width: 100%;
+    margin-top: 1rem;
+    z-index: 1;
 }
 
 .image-card:hover .image-info {
@@ -169,10 +191,7 @@ h1 {
 .title {
     font-size: 0.95rem;
     font-weight: 500;
-    margin-bottom: 0.2rem;
-    color: white;
     line-height: 1.2;
-    /* Limit lines if needed, or allow wrap */
     display: -webkit-box;
     -webkit-line-clamp: 2;
     line-clamp: 2;
@@ -182,7 +201,6 @@ h1 {
 
 .author {
     font-size: 0.8rem;
-    color: var(--secondary-text);
     font-style: italic;
 }
 

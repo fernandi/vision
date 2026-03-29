@@ -9,6 +9,9 @@ const API_URL = "";
 async function search(query) {
     if (!query) return;
 
+    // Trigger hero → compact header transition
+    document.body.classList.add('has-results');
+
     gallery.innerHTML = '<div class="placeholder-text">Searching...</div>';
 
     try {
@@ -51,7 +54,6 @@ function renderResults(results) {
         card.innerHTML = `
             <img src="${imgPath}" alt="${title}" loading="lazy">
             <div class="image-info">
-                <div class="score">Match: ${(item.score * 100).toFixed(1)}%</div>
                 <div class="title">${title}</div>
                 <div class="author">${item.Author || 'Unknown'}</div>
             </div>
@@ -63,17 +65,17 @@ function renderResults(results) {
 }
 
 // ── Lightbox ──────────────────────────────────────────────────────────────────
-const lightbox   = document.getElementById('lightbox');
-const lbImg      = document.getElementById('lightbox-img');
-const lbTitle    = document.getElementById('lightbox-title');
+const lightbox = document.getElementById('lightbox');
+const lbImg = document.getElementById('lightbox-img');
+const lbTitle = document.getElementById('lightbox-title');
 const lbDownload = document.getElementById('lightbox-download');
-const lbClose    = document.querySelector('.lightbox-close');
+const lbClose = document.querySelector('.lightbox-close');
 const lbBackdrop = document.querySelector('.lightbox-backdrop');
 
 function openLightbox(src, title) {
-    lbImg.src         = src;
+    lbImg.src = src;
     lbTitle.textContent = title;
-    lbDownload.href   = src;
+    lbDownload.href = src;
     lbDownload.download = src.split('/').pop();
     lightbox.classList.add('open');
     document.body.style.overflow = 'hidden';
