@@ -216,10 +216,15 @@ body.has-results .gallery {
     .gallery {
         grid-template-columns: repeat(2, 1fr);
         gap: 0.5rem;
+        padding: 0 .5rem 2rem;
     }
 
     .image-card img {
         height: 200px;
+    }
+
+    body.has-results #search-input {
+        padding: 0.6rem .5rem;
     }
 }
 
