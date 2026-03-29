@@ -2,7 +2,7 @@
     --bg-color: #E3E3E3;
     --card-bg: #ffffff;
     --text-color: #e0e0e0;
-    --accent-color: #bb86fc;
+    --accent-color: #737373;
     --secondary-text: #a0a0a0;
     --header-compact-h: 2.5rem;
 }
@@ -141,7 +141,7 @@ body.has-results #search-input {
 
 /* After search: gallery slides into view below compact header */
 body.has-results .gallery {
-    margin-top: calc(var(--header-compact-h) + 1.5rem);
+    margin-top: calc(var(--header-compact-h) + 2.5rem);
     opacity: 1;
     pointer-events: auto;
 }
@@ -262,41 +262,40 @@ body.has-results .gallery {
     justify-content: space-between;
     padding: 1.5rem 3rem 2rem;
     gap: 2rem;
+    font-size: clamp(0.8rem, 1.5vw, 1.1rem);
+    line-height: 1;
 }
 
 .lightbox-meta {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     gap: 0.6rem;
+    max-width: 50%;
+    align-items: end;
 }
 
 #lightbox-title {
-    font-size: clamp(1.4rem, 3vw, 2.5rem);
     font-weight: 700;
     color: black;
     text-transform: uppercase;
-    line-height: 1.05;
-    letter-spacing: 0.02em;
+    flex-shrink: 1;
 }
 
 /* Author · museum row */
 .lightbox-sub {
     display: flex;
     gap: 2.5rem;
-    font-size: 0.8rem;
     text-transform: uppercase;
     font-weight: 500;
-    letter-spacing: 0.06em;
     color: black;
+    align-items: end;
 }
 
 /* DOWNLOAD as plain bold text */
 .download-btn {
-    font-size: clamp(0.9rem, 1.5vw, 1.1rem);
     font-weight: 700;
     text-transform: uppercase;
     text-decoration: none;
-    letter-spacing: 0.06em;
     color: black;
     white-space: nowrap;
     transition: opacity 0.15s;
@@ -308,24 +307,51 @@ body.has-results .gallery {
     opacity: 0.5;
 }
 
-/* × close — top right */
+/* × close — top right, pure CSS cross */
 .lightbox-close {
+    /* ── tweak these ── */
+    --close-size: 18px;
+    --close-thickness: 2px;
+    --close-color: black;
+    --close-angle: 45deg;
+    /* ─────────────── */
+
     position: fixed;
     top: 1.2rem;
     right: 2rem;
+    width: calc(var(--close-size) * 1.414);
+    height: calc(var(--close-size) * 1.414);
     background: none;
     border: none;
-    color: black;
-    font-size: 1.4rem;
-    line-height: 1;
     cursor: pointer;
-    padding: 0.3rem 0.5rem;
+    padding: 0;
     opacity: 0.6;
     transition: opacity 0.15s;
 }
 
 .lightbox-close:hover {
     opacity: 1;
+}
+
+.lightbox-close::before,
+.lightbox-close::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--close-size);
+    height: var(--close-thickness);
+    background: var(--close-color);
+    border-radius: 0;
+    transform-origin: center;
+}
+
+.lightbox-close::before {
+    transform: translate(-50%, -50%) rotate(var(--close-angle));
+}
+
+.lightbox-close::after {
+    transform: translate(-50%, -50%) rotate(calc(var(--close-angle) + 90deg));
 }
 
 @keyframes fadeIn {
