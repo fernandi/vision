@@ -229,91 +229,99 @@ body.has-results .gallery {
     position: fixed;
     inset: 0;
     z-index: 2000;
-    align-items: center;
-    justify-content: center;
+    background-color: var(--bg-color);
+    flex-direction: column;
+    animation: fadeIn 0.2s ease;
 }
 
 .lightbox.open {
     display: flex;
 }
 
-.lightbox-backdrop {
-    position: absolute;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(4px);
-    animation: fadeIn 0.2s ease;
-}
-
-.lightbox-content {
-    position: relative;
-    z-index: 1;
-    display: flex;
-    flex-direction: column;
-    max-width: 90vw;
-    max-height: 90vh;
-    animation: scaleIn 0.2s ease;
-}
-
-.lightbox-content img {
-    max-width: 100%;
-    max-height: calc(90vh - 60px);
-    object-fit: contain;
-    display: block;
-    background: transparent;
-}
-
-.lightbox-bar {
+/* Image area: takes most of the vertical space */
+.lightbox-img-wrap {
+    flex: 1;
     display: flex;
     align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    padding: 3rem 6rem 1rem;
+}
+
+#lightbox-img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+/* Bottom bar: title left, download right */
+.lightbox-bar {
+    display: flex;
+    align-items: flex-end;
     justify-content: space-between;
-    padding: 0.6rem 0.8rem;
-    background: rgba(0, 0, 0, 0.5);
-    gap: 1rem;
+    padding: 1.5rem 3rem 2rem;
+    gap: 2rem;
+}
+
+.lightbox-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
 }
 
 #lightbox-title {
-    font-size: 0.9rem;
-    color: #ddd;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    flex: 1;
+    font-size: clamp(1.4rem, 3vw, 2.5rem);
+    font-weight: 700;
+    color: black;
+    text-transform: uppercase;
+    line-height: 1.05;
+    letter-spacing: 0.02em;
 }
 
+/* Author · museum row */
+.lightbox-sub {
+    display: flex;
+    gap: 2.5rem;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    color: black;
+}
+
+/* DOWNLOAD as plain bold text */
 .download-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.4rem 0.9rem;
-    background: var(--accent-color);
-    color: #000;
-    font-size: 0.85rem;
-    font-weight: 600;
+    font-size: clamp(0.9rem, 1.5vw, 1.1rem);
+    font-weight: 700;
+    text-transform: uppercase;
     text-decoration: none;
-    border-radius: 4px;
+    letter-spacing: 0.06em;
+    color: black;
     white-space: nowrap;
-    transition: opacity 0.2s;
+    transition: opacity 0.15s;
     flex-shrink: 0;
+    align-self: flex-end;
 }
 
 .download-btn:hover {
-    opacity: 0.85;
+    opacity: 0.5;
 }
 
+/* × close — top right */
 .lightbox-close {
-    position: absolute;
-    top: -2.2rem;
-    right: 0;
+    position: fixed;
+    top: 1.2rem;
+    right: 2rem;
     background: none;
     border: none;
-    color: #fff;
-    font-size: 1.8rem;
+    color: black;
+    font-size: 1.4rem;
     line-height: 1;
     cursor: pointer;
-    padding: 0.2rem 0.5rem;
-    opacity: 0.7;
-    transition: opacity 0.2s;
+    padding: 0.3rem 0.5rem;
+    opacity: 0.6;
+    transition: opacity 0.15s;
 }
 
 .lightbox-close:hover {
@@ -326,18 +334,6 @@ body.has-results .gallery {
     }
 
     to {
-        opacity: 1;
-    }
-}
-
-@keyframes scaleIn {
-    from {
-        transform: scale(0.9);
-        opacity: 0;
-    }
-
-    to {
-        transform: scale(1);
         opacity: 1;
     }
 }

@@ -59,7 +59,7 @@ function renderResults(results) {
             </div>
         `;
 
-        card.addEventListener('click', () => openLightbox(imgPath, title));
+        card.addEventListener('click', () => openLightbox(imgPath, title, item.Author, item.source));
         gallery.appendChild(card);
     });
 }
@@ -68,13 +68,26 @@ function renderResults(results) {
 const lightbox = document.getElementById('lightbox');
 const lbImg = document.getElementById('lightbox-img');
 const lbTitle = document.getElementById('lightbox-title');
+const lbAuthor = document.getElementById('lightbox-author');
+const lbMuseum = document.getElementById('lightbox-museum');
 const lbDownload = document.getElementById('lightbox-download');
 const lbClose = document.querySelector('.lightbox-close');
-const lbBackdrop = document.querySelector('.lightbox-backdrop');
 
-function openLightbox(src, title) {
+const MUSEUM_NAMES = {
+    artic: 'ART INSTITUTE OF CHICAGO',
+    met: 'THE MET',
+    rijks: 'RIJKSMUSEUM',
+    cleveland: 'CLEVELAND MUSEUM OF ART',
+    harvard: 'HARVARD ART MUSEUMS',
+    lacma: 'LACMA',
+    chicago: 'ART INSTITUTE OF CHICAGO',
+};
+
+function openLightbox(src, title, author, source) {
     lbImg.src = src;
-    lbTitle.textContent = title;
+    lbTitle.textContent = (title || 'Untitled').toUpperCase();
+    lbAuthor.textContent = (author && author !== 'N/A') ? author.toUpperCase() : '';
+    lbMuseum.textContent = MUSEUM_NAMES[source] || (source || '').toUpperCase();
     lbDownload.href = src;
     lbDownload.download = src.split('/').pop();
     lightbox.classList.add('open');
@@ -88,7 +101,7 @@ function closeLightbox() {
 }
 
 lbClose.addEventListener('click', closeLightbox);
-lbBackdrop.addEventListener('click', closeLightbox);
+lightbox.addEventListener('click', e => { if (e.target === lightbox) closeLightbox(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
 
 // Event Listeners
