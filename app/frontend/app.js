@@ -1,56 +1,109 @@
-const searchInput = document.getElementById('search-input');
-const searchBtn = document.getElementById('search-btn');
-const gallery = document.getElementById('gallery');
+const searchInput    = document.getElementById('search-input');
+const searchBtn      = document.getElementById('search-btn');
+const gallery        = document.getElementById('gallery');
 const suggestionBtns = document.querySelectorAll('.suggestion-btn');
 
-// API URL (same host since we serve static files from FastAPI)
-const API_URL = "";
+const API_URL   = "";
+const PAGE_SIZE = 20;
+const DIVERSITY = 0.5;
 
+// ── State ──────────────────────────────────────────────────────────────────────
+let currentQuery  = "";
+let currentOffset = 0;
+let isLoading     = false;
+let hasMore       = true;
+
+// ── Sentinel: lives inside the gallery, always at the bottom ───────────────────
+let sentinel = null;
+
+const observer = new IntersectionObserver(entries => {
+    if (entries[0].isIntersecting && !isLoading && hasMore && currentQuery) {
+        loadNextPage();
+    }
+}, { rootMargin: '300px' });
+
+function placeSentinel() {
+    if (sentinel) { observer.unobserve(sentinel); sentinel.remove(); }
+    sentinel = document.createElement('div');
+    sentinel.id = 'scroll-sentinel';
+    gallery.appendChild(sentinel);
+    observer.observe(sentinel);
+}
+
+// ── Core search / pagination ───────────────────────────────────────────────────
 async function search(query) {
     if (!query) return;
+    currentQuery  = query;
+    currentOffset = 0;
+    hasMore       = true;
 
-    // Trigger hero → compact header transition
     document.body.classList.add('has-results');
-
     gallery.innerHTML = '<div class="placeholder-text">Searching...</div>';
+
+    await loadNextPage(true);
+}
+
+async function loadNextPage(firstPage = false) {
+    if (isLoading || !hasMore) return;
+    isLoading = true;
+
+    let loader = null;
+    if (!firstPage) {
+        loader = document.createElement('div');
+        loader.className = 'load-more-spinner';
+        loader.innerHTML = '<span></span><span></span><span></span>';
+        if (sentinel) gallery.insertBefore(loader, sentinel);
+        else gallery.appendChild(loader);
+    }
 
     try {
         const response = await fetch(`${API_URL}/search`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ query: query, limit: 30 })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                query:     currentQuery,
+                page_size: PAGE_SIZE,
+                offset:    currentOffset,
+                diversity: DIVERSITY,
+            }),
         });
 
-        if (!response.ok) {
-            throw new Error('Search failed');
+        if (!response.ok) throw new Error('Search failed');
+        const data = await response.json();
+
+        if (firstPage) gallery.innerHTML = '';
+
+        if (firstPage && data.results.length === 0) {
+            gallery.innerHTML = '<div class="placeholder-text">No results found.</div>';
+            hasMore = false;
+            return;
         }
 
-        const data = await response.json();
-        renderResults(data.results);
+        appendCards(data.results);
+        currentOffset += data.results.length;
+        hasMore = data.has_more;
+        placeSentinel();
 
-    } catch (error) {
-        gallery.innerHTML = `<div class="placeholder-text">Error: ${error.message}</div>`;
-        console.error(error);
+    } catch (err) {
+        if (firstPage) {
+            gallery.innerHTML = `<div class="placeholder-text">Error: ${err.message}</div>`;
+        }
+        console.error(err);
+    } finally {
+        if (loader) loader.remove();
+        isLoading = false;
     }
 }
 
-function renderResults(results) {
-    gallery.innerHTML = '';
-
-    if (results.length === 0) {
-        gallery.innerHTML = '<div class="placeholder-text">No results found.</div>';
-        return;
-    }
+// ── Render helpers ─────────────────────────────────────────────────────────────
+function appendCards(results) {
+    if (sentinel) sentinel.remove(); // remove before appending cards
 
     results.forEach(item => {
-        const card = document.createElement('div');
+        const card    = document.createElement('div');
         card.className = 'image-card';
-
         const imgPath = item.image_url || `/images/${item.filename}`;
-        const title = item.Title || 'Untitled';
-
+        const title   = item.Title || 'Untitled';
         card.innerHTML = `
             <img src="${imgPath}" alt="${title}" loading="lazy">
             <div class="image-info">
@@ -58,38 +111,37 @@ function renderResults(results) {
                 <div class="author">${item.Author || 'Unknown'}</div>
             </div>
         `;
-
         card.addEventListener('click', () => openLightbox(imgPath, title, item.Author, item.source));
         gallery.appendChild(card);
     });
 }
 
-// ── Lightbox ──────────────────────────────────────────────────────────────────
-const lightbox = document.getElementById('lightbox');
-const lbImg = document.getElementById('lightbox-img');
-const lbTitle = document.getElementById('lightbox-title');
-const lbAuthor = document.getElementById('lightbox-author');
-const lbMuseum = document.getElementById('lightbox-museum');
+// ── Lightbox ───────────────────────────────────────────────────────────────────
+const lightbox   = document.getElementById('lightbox');
+const lbImg      = document.getElementById('lightbox-img');
+const lbTitle    = document.getElementById('lightbox-title');
+const lbAuthor   = document.getElementById('lightbox-author');
+const lbMuseum   = document.getElementById('lightbox-museum');
 const lbDownload = document.getElementById('lightbox-download');
-const lbClose = document.querySelector('.lightbox-close');
+const lbClose    = document.querySelector('.lightbox-close');
 
 const MUSEUM_NAMES = {
-    artic: 'ART INSTITUTE OF CHICAGO',
-    met: 'THE MET',
-    rijks: 'RIJKSMUSEUM',
+    artic:     'ART INSTITUTE OF CHICAGO',
+    met:       'THE MET',
+    rijks:     'RIJKSMUSEUM',
     cleveland: 'CLEVELAND MUSEUM OF ART',
-    harvard: 'HARVARD ART MUSEUMS',
-    lacma: 'LACMA',
-    chicago: 'ART INSTITUTE OF CHICAGO',
+    harvard:   'HARVARD ART MUSEUMS',
+    lacma:     'LACMA',
+    chicago:   'ART INSTITUTE OF CHICAGO',
 };
 
 function openLightbox(src, title, author, source) {
     lbImg.src = src;
-    lbTitle.textContent = (title || 'Untitled').toUpperCase();
-    lbAuthor.textContent = (author && author !== 'N/A') ? author.toUpperCase() : '';
-    lbMuseum.textContent = MUSEUM_NAMES[source] || (source || '').toUpperCase();
-    lbDownload.href = src;
-    lbDownload.download = src.split('/').pop();
+    lbTitle.textContent   = (title || 'Untitled').toUpperCase();
+    lbAuthor.textContent  = (author && author !== 'N/A') ? author.toUpperCase() : '';
+    lbMuseum.textContent  = MUSEUM_NAMES[source] || (source || '').toUpperCase();
+    lbDownload.href       = src;
+    lbDownload.download   = src.split('/').pop();
     lightbox.classList.add('open');
     document.body.style.overflow = 'hidden';
 }
@@ -104,17 +156,11 @@ lbClose.addEventListener('click', closeLightbox);
 lightbox.addEventListener('click', e => { if (e.target === lightbox) closeLightbox(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
 
-// Event Listeners
-searchBtn.addEventListener('click', () => {
-    search(searchInput.value);
+// ── Event listeners ────────────────────────────────────────────────────────────
+searchBtn.addEventListener('click', () => search(searchInput.value.trim()));
+searchInput.addEventListener('keypress', e => {
+    if (e.key === 'Enter') search(searchInput.value.trim());
 });
-
-searchInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-        search(searchInput.value);
-    }
-});
-
 suggestionBtns.forEach(btn => {
     btn.addEventListener('click', () => {
         searchInput.value = btn.innerText;

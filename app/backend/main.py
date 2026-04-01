@@ -54,7 +54,10 @@ def get_image_url(item: dict) -> str:
 # API Models
 class SearchRequest(BaseModel):
     query: str
-    limit: Optional[int] = 20
+    page_size: Optional[int] = 20   # results per page
+    offset: Optional[int] = 0       # pagination offset within pre-ranked pool
+    pool_size: Optional[int] = 200  # total pool to pre-rank (shared across pages)
+    diversity: Optional[float] = 0.5
 
 # Routes
 @app.get("/health")
@@ -75,10 +78,16 @@ def health_check():
 def search(req: SearchRequest):
     try:
         ensure_loaded()
-        results = search_engine.search(req.query, k=req.limit)
-        for item in results:
+        data = search_engine.search(
+            req.query,
+            pool_size=req.pool_size,
+            page_size=req.page_size,
+            offset=req.offset,
+            diversity=req.diversity,
+        )
+        for item in data["results"]:
             item["image_url"] = get_image_url(item)
-        return {"results": results}
+        return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
