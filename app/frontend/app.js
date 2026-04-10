@@ -1,11 +1,16 @@
 const searchInput    = document.getElementById('search-input');
 const searchBtn      = document.getElementById('search-btn');
 const gallery        = document.getElementById('gallery');
+const diversityToggle = document.getElementById('diversity-toggle');
 const suggestionBtns = document.querySelectorAll('.suggestion-btn');
 
 const API_URL   = "";
 const PAGE_SIZE = 20;
-const DIVERSITY = 0.5;
+
+// Current diversity value: read from toggle state
+function getDiversity() {
+    return diversityToggle.getAttribute('aria-pressed') === 'true' ? 0.5 : 0.0;
+}
 
 // ── State ──────────────────────────────────────────────────────────────────────
 let currentQuery  = "";
@@ -64,7 +69,7 @@ async function loadNextPage(firstPage = false) {
                 query:     currentQuery,
                 page_size: PAGE_SIZE,
                 offset:    currentOffset,
-                diversity: DIVERSITY,
+                diversity: getDiversity(),
             }),
         });
 
@@ -166,4 +171,12 @@ suggestionBtns.forEach(btn => {
         searchInput.value = btn.innerText;
         search(btn.innerText);
     });
+});
+
+// ── Diversity toggle ────────────────────────────────────────────────────────────
+diversityToggle.addEventListener('click', () => {
+    const isOn = diversityToggle.getAttribute('aria-pressed') === 'true';
+    diversityToggle.setAttribute('aria-pressed', isOn ? 'false' : 'true');
+    // Re-run the current query with the new diversity value
+    if (currentQuery) search(currentQuery);
 });

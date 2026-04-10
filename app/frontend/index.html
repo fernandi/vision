@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Visual Search</title>
-    <link rel="stylesheet" href="style.css?v=4">
+    <link rel="stylesheet" href="style.css?v=5">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -24,6 +24,13 @@
                 </svg>
             </button>
         </div>
+        <!-- Diversity toggle — hidden until first search -->
+        <button id="diversity-toggle" class="diversity-toggle" aria-pressed="true" title="Toggle diversity (MMR)">
+            <span class="toggle-track">
+                <span class="toggle-thumb"></span>
+            </span>
+            <span class="toggle-label">DIVERSITY</span>
+        </button>
     </header>
 
     <main id="gallery" class="gallery">
@@ -47,7 +54,7 @@
         </div>
         <button class="lightbox-close" aria-label="Fermer"></button>
     </div>
-    <script src="app.js?v=4"></script>
+    <script src="app.js?v=5"></script>
 </body>
 
 </html>
