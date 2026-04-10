@@ -1,16 +1,32 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from typing import List, Optional
 import os
+import time
 
 from app.backend.search_engine import VisualSearchEngine
 
-app = FastAPI(title="Art Visual Search")
-
 ENV = os.environ.get("ENV", "local")
 HF_SOURCE_DATASET = os.environ.get("HF_SOURCE_DATASET", "Mitsua/art-museums-pd-440k")
+
+# Eager startup: load the model + index before accepting requests
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("[startup] Loading search engine...")
+    t0 = time.time()
+    try:
+        search_engine.load()
+        print(f"[startup] Ready in {time.time() - t0:.1f}s")
+    except Exception as e:
+        search_engine.load_error = str(e)
+        print(f"[startup] ERROR: {e}")
+    yield
+    # Nothing to tear down
+
+app = FastAPI(title="Art Visual Search", lifespan=lifespan)
 
 # CORS
 app.add_middleware(
@@ -77,7 +93,8 @@ def health_check():
 @app.post("/search")
 def search(req: SearchRequest):
     try:
-        ensure_loaded()
+        ensure_loaded()  # no-op if already loaded at startup
+        t0 = time.time()
         data = search_engine.search(
             req.query,
             pool_size=req.pool_size,
@@ -85,6 +102,8 @@ def search(req: SearchRequest):
             offset=req.offset,
             diversity=req.diversity,
         )
+        elapsed = time.time() - t0
+        print(f"[search] '{req.query}' offset={req.offset} → {len(data['results'])} results in {elapsed:.3f}s")
         for item in data["results"]:
             item["image_url"] = get_image_url(item)
         return data
