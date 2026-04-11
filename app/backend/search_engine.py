@@ -536,7 +536,8 @@ class VisualSearchEngine:
         self._pool_cache[key] = pool
         self._pool_cache_order.append(key)
 
-    def search(self, query_text, pool_size=200, page_size=20, offset=0, diversity=0.5):
+    def search(self, query_text, pool_size=200, page_size=20, offset=0, diversity=0.5,
+                image_embedding=None, image_weight=0.5):
         """
         Paginated search with MMR diversity.
 
@@ -546,32 +547,53 @@ class VisualSearchEngine:
         no re-encoding or re-ranking.
 
         Args:
-            query_text:  natural language query
-            pool_size:   total diverse results to pre-rank (default 200)
-            page_size:   results to return in this response (default 20)
-            offset:      starting index within the ranked pool (default 0)
-            diversity:   MMR lambda (0=relevance-only, 1=diversity-only)
+            query_text:       natural language query (may be empty if image_embedding set)
+            pool_size:        total diverse results to pre-rank (default 200)
+            page_size:        results to return in this response (default 20)
+            offset:           starting index within the ranked pool (default 0)
+            diversity:        MMR lambda (0=relevance-only, 1=diversity-only)
+            image_embedding:  optional (1, D) float32 numpy array — normalised CLIP
+                              image vector to blend with the text query.
+            image_weight:     blend factor (0=text only, 1=image only). Default 0.5.
         Returns:
             dict with keys: results (list), total (int), has_more (bool)
         """
         if not self.model:
             self.load()
 
-        cache_key = (query_text.strip().lower(), round(diversity, 2))
+        # Cache key: include a compact hash of the image embedding when present
+        img_hash = None
+        if image_embedding is not None:
+            img_hash = hash(image_embedding.tobytes())
+        cache_key = (query_text.strip().lower(), round(diversity, 2), img_hash)
         pool = self._pool_cache_get(cache_key)
 
         if pool is None:
             # --- Encode query ---
-            inputs = self.processor(text=[query_text], return_tensors="pt").to(self.device)
-            with torch.no_grad():
-                outputs = self.model.get_text_features(**inputs)
-                if not isinstance(outputs, torch.Tensor):
-                    text_features = outputs.pooler_output if hasattr(outputs, 'pooler_output') else outputs
-                else:
-                    text_features = outputs
+            if query_text.strip():
+                inputs = self.processor(text=[query_text], return_tensors="pt").to(self.device)
+                with torch.no_grad():
+                    outputs = self.model.get_text_features(**inputs)
+                    if not isinstance(outputs, torch.Tensor):
+                        text_features = outputs.pooler_output if hasattr(outputs, 'pooler_output') else outputs
+                    else:
+                        text_features = outputs
+                text_features = text_features / text_features.norm(p=2, dim=-1, keepdim=True)
+                text_np = text_features.cpu().numpy().astype('float32')  # (1, D)
+            else:
+                text_np = None
 
-            text_features = text_features / text_features.norm(p=2, dim=-1, keepdim=True)
-            text_embedding = text_features.cpu().numpy().astype('float32')
+            # --- Blend text + image when both present ---
+            if image_embedding is not None and text_np is not None:
+                # Weighted average in embedding space, then re-normalize
+                blended = (1.0 - image_weight) * text_np + image_weight * image_embedding
+                norm    = np.linalg.norm(blended, axis=1, keepdims=True)
+                text_embedding = (blended / np.where(norm == 0, 1e-9, norm)).astype('float32')
+            elif image_embedding is not None:
+                # Image-only query
+                text_embedding = image_embedding.astype('float32')
+            else:
+                text_embedding = text_np
 
             # --- FAISS search: over-fetch for both MMR headroom and Voronoi clustering ---
             # Always fetch 3× candidates so the no-diversity mode can also compute

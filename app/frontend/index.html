@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Visual Search</title>
-    <link rel="stylesheet" href="style.css?v=9">
+    <link rel="stylesheet" href="style.css?v=10">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -14,7 +14,12 @@
 
 <body>
     <header>
-        <div class="search-container">
+        <div class="search-container" id="search-container">
+            <!-- Image chip: shows when a reference image is dropped -->
+            <div id="image-chip" class="image-chip" aria-hidden="true">
+                <img id="image-chip-thumb" src="" alt="Reference image">
+                <button id="image-chip-remove" class="image-chip-remove" aria-label="Remove image">&times;</button>
+            </div>
             <input type="text" id="search-input" placeholder="FISHING BY NIGHT" autofocus>
             <button id="search-btn" aria-label="Search">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
@@ -32,7 +37,7 @@
                 <span class="toggle-track">
                     <span class="toggle-thumb"></span>
                 </span>
-                <span class="toggle-label">DIVERSITY</span>
+                <span class="toggle-label">BOOT DIVERSITY</span>
             </button>
             <!-- Future filters go here -->
         </div>
@@ -85,7 +90,7 @@
         </div>
         <div id="cluster-grid" class="cluster-grid"></div>
     </div>
-    <script src="app.js?v=9"></script>
+    <script src="app.js?v=10"></script>
 </body>
 
 </html>

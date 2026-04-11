@@ -6,6 +6,8 @@ from pydantic import BaseModel
 from typing import List, Optional
 import os
 import time
+import base64
+import io
 
 from app.backend.search_engine import VisualSearchEngine
 
@@ -69,11 +71,13 @@ def get_image_url(item: dict) -> str:
 
 # API Models
 class SearchRequest(BaseModel):
-    query: str
+    query: str = ""          # may be empty when searching by image only
     page_size: Optional[int] = 20   # results per page
     offset: Optional[int] = 0       # pagination offset within pre-ranked pool
     pool_size: Optional[int] = 200  # total pool to pre-rank (shared across pages)
     diversity: Optional[float] = 0.5
+    reference_image: Optional[str] = None  # base64-encoded image (JPEG or PNG)
+    image_weight: Optional[float] = 0.5    # blend factor: 0=text only, 1=image only
 
 # Routes
 @app.get("/health")
@@ -95,15 +99,41 @@ def search(req: SearchRequest):
     try:
         ensure_loaded()  # no-op if already loaded at startup
         t0 = time.time()
+
+        # Decode reference image and encode with CLIP (if provided)
+        image_embedding = None
+        if req.reference_image:
+            from PIL import Image
+            import torch
+            import numpy as np
+            img_data = base64.b64decode(req.reference_image)
+            img = Image.open(io.BytesIO(img_data)).convert("RGB")
+            processor = search_engine.processor
+            model     = search_engine.model
+            device    = search_engine.device
+            inputs = processor(images=img, return_tensors="pt").to(device)
+            with torch.no_grad():
+                output = model.get_image_features(**inputs)
+            # get_image_features may return a tensor or a model output object
+            if not isinstance(output, torch.Tensor):
+                img_features = output.pooler_output if hasattr(output, "pooler_output") else output.last_hidden_state[:, 0]
+            else:
+                img_features = output
+            img_features = img_features / img_features.norm(p=2, dim=-1, keepdim=True)
+            image_embedding = img_features.cpu().numpy().astype("float32")  # (1, D)
+
         data = search_engine.search(
             req.query,
             pool_size=req.pool_size,
             page_size=req.page_size,
             offset=req.offset,
             diversity=req.diversity,
+            image_embedding=image_embedding,
+            image_weight=req.image_weight,
         )
         elapsed = time.time() - t0
-        print(f"[search] '{req.query}' offset={req.offset} → {len(data['results'])} results in {elapsed:.3f}s")
+        mode = "text+image" if image_embedding is not None else "text"
+        print(f"[search/{mode}] '{req.query}' offset={req.offset} → {len(data['results'])} results in {elapsed:.3f}s")
         for item in data["results"]:
             item["image_url"] = get_image_url(item)
         return data
