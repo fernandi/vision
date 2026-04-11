@@ -268,6 +268,54 @@ class VisualSearchEngine:
 
         return selected_ids, cluster_sizes, cluster_members
 
+    def _voronoi_clusters(self, selected_ids, all_candidate_ids):
+        """
+        Compute Voronoi cluster sizes and member lists without MMR.
+
+        Assigns each candidate in `all_candidate_ids` to the nearest image
+        in `selected_ids` using cosine similarity in the CLIP embedding space.
+        Used to add Voronoi clustering to the pure-relevance (no-diversity) mode.
+
+        Args:
+            selected_ids:       list of faiss_ids that are the 'centroid' images
+                                (the top-N shown in results).
+            all_candidate_ids:  full over-fetched candidate pool (superset of
+                                selected_ids, typically 3×).
+        Returns:
+            (cluster_sizes, cluster_members) dicts keyed by selected faiss_id.
+        """
+        if not all_candidate_ids or not selected_ids:
+            return {}, {}
+
+        # Reconstruct embeddings batch
+        all_vecs = np.vstack([
+            self.index.reconstruct(int(fid)) for fid in all_candidate_ids
+        ]).astype('float32')   # (M, D)
+        norms = np.linalg.norm(all_vecs, axis=1, keepdims=True)
+        norms = np.where(norms == 0, 1e-9, norms)
+        all_vecs /= norms      # unit vectors
+
+        # Indices of selected_ids within all_candidate_ids
+        id_to_local = {fid: i for i, fid in enumerate(all_candidate_ids)}
+        sel_indices  = np.array([id_to_local[fid] for fid in selected_ids])  # (S,)
+
+        selected_vecs = all_vecs[sel_indices, :]  # (S, D)
+
+        # Cross-sim: for each candidate, which centroid is closest?
+        # (S, D) @ (D, M) → (S, M)
+        cross_sim    = selected_vecs @ all_vecs.T   # (S, M)
+        nearest_pos  = cross_sim.argmax(axis=0)     # (M,) index into selected_ids
+
+        cluster_sizes   = {}
+        cluster_members = {sid: [] for sid in selected_ids}
+        for candidate_local_idx, centroid_local_pos in enumerate(nearest_pos):
+            sid  = selected_ids[int(centroid_local_pos)]
+            cfid = all_candidate_ids[candidate_local_idx]
+            cluster_sizes[sid]   = cluster_sizes.get(sid, 0) + 1
+            cluster_members[sid].append(cfid)
+
+        return cluster_sizes, cluster_members
+
     def _pool_cache_get(self, key):
         if key in self._pool_cache:
             # Move to end (most recently used)
@@ -322,11 +370,10 @@ class VisualSearchEngine:
             text_features = text_features / text_features.norm(p=2, dim=-1, keepdim=True)
             text_embedding = text_features.cpu().numpy().astype('float32')
 
-            # --- FAISS search: over-fetch for MMR room ---
-            # Fetch 3× pool_size candidates (capped at index size).
-            # 3× gives MMR enough diversity headroom while cutting FAISS scan
-            # time and the subsequent reconstruct() calls by ~40% vs 5×.
-            fetch_k = pool_size if diversity <= 0.0 else min(pool_size * 3, self.index.ntotal)
+            # --- FAISS search: over-fetch for both MMR headroom and Voronoi clustering ---
+            # Always fetch 3× candidates so the no-diversity mode can also compute
+            # Voronoi cluster sizes (near-duplicates not shown in the top-N).
+            fetch_k = min(pool_size * 3, self.index.ntotal)
             distances, indices = self.index.search(text_embedding, fetch_k)
 
             valid_ids = [
@@ -339,15 +386,24 @@ class VisualSearchEngine:
                 if idx >= 0 and int(idx) not in self.denylist
             }
 
-            # --- MMR re-rank to pool_size ---
+            # --- Rank / re-rank to pool_size ---
             cluster_sizes   = {}   # faiss_id → Voronoi count
             cluster_members = {}   # faiss_id → [faiss_ids in cluster]
+
             if diversity > 0.0 and len(valid_ids) > pool_size:
+                # MMR: selects diverse pool AND computes Voronoi inside
                 selected_ids, cluster_sizes, cluster_members = self._mmr_rerank(
                     text_embedding[0], valid_ids, score_by_id, pool_size, diversity
                 )
             else:
+                # Pure relevance: top-N by FAISS score
                 selected_ids = valid_ids[:pool_size]
+                # Voronoi clustering on the over-fetched candidates so we still
+                # know how many near-duplicates each shown image "represents"
+                if len(valid_ids) > pool_size:
+                    cluster_sizes, cluster_members = self._voronoi_clusters(
+                        selected_ids, valid_ids
+                    )
 
             # --- Fetch all metadata for the pool ---
             meta_by_id = self._lookup_metadata(selected_ids)
