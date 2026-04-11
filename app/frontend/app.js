@@ -20,13 +20,23 @@ function getCombinationMode() {
     return checked ? checked.value : 'centroid';
 }
 
-// ── State ──────────────────────────────────────────────────────────────────────
+// ── State ────────────────────────────────────────────────────────────────────
 let currentQuery  = "";
 let currentOffset = 0;
 let isLoading     = false;
 let hasMore       = true;
 // Multimodal: array of { src, base64 } objects
 let referenceImages = [];
+
+// ── Saved images ────────────────────────────────────────────────────────────
+// Map: imgPath → { title, author, source, memberIds, clusterSize }
+const savedItems  = new Map();
+const savedPanel  = document.getElementById('saved-panel');
+const savedThumbs = document.getElementById('saved-thumbs');
+
+const ICON_EXPAND = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>`;
+const ICON_BOOKMARK_EMPTY  = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`;
+const ICON_BOOKMARK_FILLED = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`;
 
 // ── Image chips DOM ref ─────────────────────────────────────────────────────────
 const searchContainer   = document.getElementById('search-container');
@@ -129,9 +139,8 @@ function appendCards(results) {
         const title    = item.Title || 'Untitled';
         const hasGroup = item.cluster_size != null && item.cluster_size > 1
                          && Array.isArray(item.cluster_member_ids);
-        const simCount = hasGroup ? item.cluster_size - 1 : 0; // exclude representative itself
+        const simCount = hasGroup ? item.cluster_size - 1 : 0;
 
-        // Title: shows similar count inline on hover only (no permanent badge)
         const titleHTML = hasGroup
             ? `<div class="title title-with-similar">
                  <span>${title}</span>
@@ -139,15 +148,55 @@ function appendCards(results) {
                </div>`
             : `<div class="title">${title}</div>`;
 
+        // Image wrapped in positioning context for action buttons
         card.innerHTML = `
-            <img src="${imgPath}" alt="${title}" loading="lazy">
+            <div class="card-img-wrap">
+                <img src="${imgPath}" alt="${title}" loading="lazy">
+            </div>
             <div class="image-info">
                 ${titleHTML}
                 <div class="author">${item.Author || 'Unknown'}</div>
             </div>
         `;
 
-        // Make gallery image draggable → can be dropped into search bar
+        // ── Action buttons (bottom-right of image) ───────────────────────────
+        const imgWrap = card.querySelector('.card-img-wrap');
+        const actions = document.createElement('div');
+        actions.className = 'image-card-actions';
+
+        // Expand → lightbox
+        const expandBtn = document.createElement('button');
+        expandBtn.className = 'card-action-btn card-action-expand';
+        expandBtn.title     = 'Agrandir';
+        expandBtn.innerHTML = ICON_EXPAND;
+        expandBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            openLightbox(imgPath, title, item.Author, item.source,
+                hasGroup ? item.cluster_member_ids : null,
+                hasGroup ? item.cluster_size       : null);
+        });
+
+        // Save → saved panel
+        const saveBtn = document.createElement('button');
+        saveBtn.className   = 'card-action-btn card-action-save';
+        saveBtn.dataset.src = imgPath;
+        saveBtn.title       = 'Enregistrer';
+        const isSaved = savedItems.has(imgPath);
+        saveBtn.innerHTML   = isSaved ? ICON_BOOKMARK_FILLED : ICON_BOOKMARK_EMPTY;
+        if (isSaved) saveBtn.classList.add('saved');
+        saveBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            toggleSaved(imgPath, title, item.Author, item.source,
+                hasGroup ? item.cluster_member_ids : null,
+                hasGroup ? item.cluster_size       : null,
+                saveBtn);
+        });
+
+        actions.appendChild(expandBtn);
+        actions.appendChild(saveBtn);
+        imgWrap.appendChild(actions);
+
+        // ── Draggable ────────────────────────────────────────────────────────────
         const img = card.querySelector('img');
         img.draggable = true;
         img.addEventListener('dragstart', e => {
@@ -156,13 +205,11 @@ function appendCards(results) {
             e.dataTransfer.setData('text/plain',    imgPath);
         });
 
-        // All cards open the regular lightbox; cluster cards also load the strip
+        // ── Card click → lightbox ─────────────────────────────────────────────────
         card.addEventListener('click', () => {
-            openLightbox(
-                imgPath, title, item.Author, item.source,
+            openLightbox(imgPath, title, item.Author, item.source,
                 hasGroup ? item.cluster_member_ids : null,
-                hasGroup ? item.cluster_size       : null
-            );
+                hasGroup ? item.cluster_size       : null);
         });
 
         gallery.appendChild(card);
@@ -284,6 +331,64 @@ function closeLightbox() {
 
 lbClose.addEventListener('click', closeLightbox);
 lightbox.addEventListener('click', e => { if (e.target === lightbox) closeLightbox(); });
+
+// ── Saved images management ─────────────────────────────────────────────────────────
+function toggleSaved(imgPath, title, author, source, memberIds, clusterSize, btn) {
+    if (savedItems.has(imgPath)) {
+        savedItems.delete(imgPath);
+        savedThumbs.querySelectorAll('.saved-thumb').forEach(t => {
+            if (t.dataset.src === imgPath) t.remove();
+        });
+        btn.classList.remove('saved');
+        btn.innerHTML = ICON_BOOKMARK_EMPTY;
+    } else {
+        savedItems.set(imgPath, { title, author, source, memberIds, clusterSize });
+        addSavedThumb(imgPath, title, author, source, memberIds, clusterSize);
+        btn.classList.add('saved');
+        btn.innerHTML = ICON_BOOKMARK_FILLED;
+    }
+    document.body.classList.toggle('has-saved', savedItems.size > 0);
+}
+
+function addSavedThumb(imgPath, title, author, source, memberIds, clusterSize) {
+    const thumb = document.createElement('div');
+    thumb.className  = 'saved-thumb';
+    thumb.dataset.src = imgPath;
+    thumb.title      = title;
+
+    const img = document.createElement('img');
+    img.src  = imgPath;
+    img.alt  = title;
+    thumb.appendChild(img);
+
+    // × remove button
+    const rm = document.createElement('button');
+    rm.className   = 'saved-thumb-remove';
+    rm.title       = 'Retirer';
+    rm.textContent = '×';
+    rm.addEventListener('click', e => {
+        e.stopPropagation();
+        savedItems.delete(imgPath);
+        thumb.remove();
+        document.body.classList.toggle('has-saved', savedItems.size > 0);
+        // Un-highlight any visible save buttons for this image
+        document.querySelectorAll('.card-action-save').forEach(b => {
+            if (b.dataset.src === imgPath) {
+                b.classList.remove('saved');
+                b.innerHTML = ICON_BOOKMARK_EMPTY;
+            }
+        });
+    });
+    thumb.appendChild(rm);
+
+    // Click thumbnail → open lightbox
+    thumb.addEventListener('click', () => {
+        const d = savedItems.get(imgPath);
+        if (d) openLightbox(imgPath, d.title, d.author, d.source, d.memberIds, d.clusterSize);
+    });
+
+    savedThumbs.appendChild(thumb);
+}
 
 // ── Cluster group lightbox (kept for backward compat, no longer primary entry) ─
 const clusterLightbox = document.getElementById('cluster-lightbox');
