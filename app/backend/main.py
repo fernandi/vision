@@ -76,8 +76,9 @@ class SearchRequest(BaseModel):
     offset: Optional[int] = 0       # pagination offset within pre-ranked pool
     pool_size: Optional[int] = 200  # total pool to pre-rank (shared across pages)
     diversity: Optional[float] = 0.5
-    reference_image: Optional[str] = None  # base64-encoded image (JPEG or PNG)
-    image_weight: Optional[float] = 0.5    # blend factor: 0=text only, 1=image only
+    reference_image: Optional[str] = None        # single base64 image (legacy)
+    reference_images: Optional[List[str]] = None # multiple base64 images
+    image_weight: Optional[float] = 0.5          # blend factor: 0=text only, 1=image only
 
 # Routes
 @app.get("/health")
@@ -100,28 +101,35 @@ def search(req: SearchRequest):
         ensure_loaded()  # no-op if already loaded at startup
         t0 = time.time()
 
-        # Decode reference image and encode with CLIP (if provided)
+        # Collect all reference images (supports list or legacy single)
         image_embedding = None
-        if req.reference_image:
+        b64_list = req.reference_images or ([req.reference_image] if req.reference_image else [])
+        if b64_list:
             from PIL import Image
             import torch
             import numpy as np
-            img_data = base64.b64decode(req.reference_image)
-            img = Image.open(io.BytesIO(img_data)).convert("RGB")
             processor = search_engine.processor
             model     = search_engine.model
             device    = search_engine.device
-            inputs = processor(images=img, return_tensors="pt").to(device)
-            with torch.no_grad():
-                output = model.get_image_features(**inputs)
-            # get_image_features may return a tensor or a model output object
-            if not isinstance(output, torch.Tensor):
-                img_features = output.pooler_output if hasattr(output, "pooler_output") else output.last_hidden_state[:, 0]
-            else:
-                img_features = output
-            img_features = img_features / img_features.norm(p=2, dim=-1, keepdim=True)
-            image_embedding = img_features.cpu().numpy().astype("float32")  # (1, D)
+            embeddings = []
+            for b64 in b64_list:
+                img_data = base64.b64decode(b64)
+                img = Image.open(io.BytesIO(img_data)).convert("RGB")
+                inputs = processor(images=img, return_tensors="pt").to(device)
+                with torch.no_grad():
+                    output = model.get_image_features(**inputs)
+                if not isinstance(output, torch.Tensor):
+                    feat = output.pooler_output if hasattr(output, "pooler_output") else output.last_hidden_state[:, 0]
+                else:
+                    feat = output
+                feat = feat / feat.norm(p=2, dim=-1, keepdim=True)
+                embeddings.append(feat.cpu().numpy().astype("float32"))
+            # Average and re-normalize (works for N=1 too)
+            avg  = np.mean(np.stack(embeddings, axis=0), axis=0)          # (1, D)
+            norm = np.linalg.norm(avg, axis=1, keepdims=True)
+            image_embedding = (avg / np.where(norm == 0, 1e-9, norm)).astype("float32")
 
+        n_imgs = len(b64_list)
         data = search_engine.search(
             req.query,
             pool_size=req.pool_size,
@@ -132,7 +140,7 @@ def search(req: SearchRequest):
             image_weight=req.image_weight,
         )
         elapsed = time.time() - t0
-        mode = "text+image" if image_embedding is not None else "text"
+        mode = f"text+{n_imgs}img" if n_imgs else "text"
         print(f"[search/{mode}] '{req.query}' offset={req.offset} → {len(data['results'])} results in {elapsed:.3f}s")
         for item in data["results"]:
             item["image_url"] = get_image_url(item)

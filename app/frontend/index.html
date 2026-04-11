@@ -15,11 +15,8 @@
 <body>
     <header>
         <div class="search-container" id="search-container">
-            <!-- Image chip: shows when a reference image is dropped -->
-            <div id="image-chip" class="image-chip" aria-hidden="true">
-                <img id="image-chip-thumb" src="" alt="Reference image">
-                <button id="image-chip-remove" class="image-chip-remove" aria-label="Remove image">&times;</button>
-            </div>
+            <!-- Image chips: populated dynamically when images are dropped -->
+            <div id="image-chips-container" class="image-chips-container"></div>
             <input type="text" id="search-input" placeholder="FISHING BY NIGHT" autofocus>
             <button id="search-btn" aria-label="Search">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"

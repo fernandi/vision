@@ -19,14 +19,12 @@ let currentQuery  = "";
 let currentOffset = 0;
 let isLoading     = false;
 let hasMore       = true;
-// Multimodal: base64-encoded reference image for text+image blending
-let referenceImage = null;
+// Multimodal: array of { src, base64 } objects
+let referenceImages = [];
 
-// ── Image chip DOM refs ─────────────────────────────────────────────────────────
-const searchContainer  = document.getElementById('search-container');
-const imageChip        = document.getElementById('image-chip');
-const imageChipThumb   = document.getElementById('image-chip-thumb');
-const imageChipRemove  = document.getElementById('image-chip-remove');
+// ── Image chips DOM ref ─────────────────────────────────────────────────────────
+const searchContainer   = document.getElementById('search-container');
+const chipsContainer    = document.getElementById('image-chips-container');
 
 // ── Sentinel: lives inside the gallery, always at the bottom ───────────────────
 let sentinel = null;
@@ -80,7 +78,9 @@ async function loadNextPage(firstPage = false) {
                 page_size:       PAGE_SIZE,
                 offset:          currentOffset,
                 diversity:       getDiversity(),
-                ...(referenceImage ? { reference_image: referenceImage, image_weight: 0.5 } : {}),
+                ...(referenceImages.length
+                    ? { reference_images: referenceImages.map(r => r.base64), image_weight: 0.5 }
+                    : {}),
             }),
         });
 
@@ -321,7 +321,8 @@ diversityToggle.addEventListener('click', () => {
     if (currentQuery) search(currentQuery);
 });
 
-// ── Filter panel (+) ────────────────────────────────────────────────────────────
+
+// ── Filter panel (+) ──────────────────────────────────────────────────────────
 function openFilterPanel() {
     filterPanel.classList.add('open');
     filterBtn.setAttribute('aria-expanded', 'true');
@@ -340,7 +341,6 @@ filterBtn.addEventListener('click', (e) => {
     isOpen ? closeFilterPanel() : openFilterPanel();
 });
 
-// Close panel when clicking outside
 document.addEventListener('click', (e) => {
     if (filterPanel.classList.contains('open')
         && !filterPanel.contains(e.target)
@@ -349,42 +349,60 @@ document.addEventListener('click', (e) => {
     }
 });
 
-
-// ── Image chip: helpers ────────────────────────────────────────────────────────
+// ── Image chips: helpers ──────────────────────────────────────────────────────
 function blobToBase64(blob) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload  = () => resolve(reader.result.split(',')[1]); // strip data:...;base64, prefix
+        reader.onload  = () => resolve(reader.result.split(',')[1]);
         reader.onerror = reject;
         reader.readAsDataURL(blob);
     });
 }
 
-/** Show the chip with a given src URL and base64 string. Does NOT trigger search. */
-function setImageChip(src, base64) {
-    referenceImage       = base64;
-    imageChipThumb.src   = src;
-    imageChip.classList.add('visible');
-    imageChip.removeAttribute('aria-hidden');
+/** Append a new chip. Does NOT trigger search. */
+function addImageChip(src, base64) {
+    const idx = referenceImages.length;
+    referenceImages.push({ src, base64 });
+
+    const chip = document.createElement('div');
+    chip.className   = 'image-chip';
+    chip.dataset.idx = idx;
+
+    const thumb = document.createElement('img');
+    thumb.src = src;
+    thumb.alt = 'Reference image';
+    chip.appendChild(thumb);
+
+    const btn = document.createElement('button');
+    btn.className   = 'image-chip-remove';
+    btn.ariaLabel   = 'Remove image';
+    btn.textContent = '×';
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeImageChip(chip, Number(chip.dataset.idx));
+    });
+    chip.appendChild(btn);
+
+    chipsContainer.appendChild(chip);
 }
 
-/** Remove the chip. If a query is active, re-runs it without the image. */
-function clearImageChip(rerun = true) {
-    referenceImage = null;
-    imageChipThumb.src = '';
-    imageChip.classList.remove('visible');
-    imageChip.setAttribute('aria-hidden', 'true');
+/** Remove a specific chip and re-index remaining ones. Re-runs search if query active. */
+function removeImageChip(chipEl, idx) {
+    chipEl.remove();
+    referenceImages.splice(idx, 1);
+    chipsContainer.querySelectorAll('.image-chip').forEach((c, i) => { c.dataset.idx = i; });
+    if (currentQuery) search(currentQuery);
+}
+
+/** Remove all chips. */
+function clearAllChips(rerun = false) {
+    chipsContainer.innerHTML = '';
+    referenceImages = [];
     if (rerun && currentQuery) search(currentQuery);
 }
 
-imageChipRemove.addEventListener('click', (e) => {
-    e.stopPropagation();
-    clearImageChip(true);   // clear + re-run search without image
-});
-
-// ── Drag & drop onto search container ─────────────────────────────────────────
-// Drop just sets the reference image chip.
-// Search is NOT triggered automatically — the user presses Enter or the button.
+// ── Drag & drop onto search container ────────────────────────────────────────
+// Each drop ADDS a chip. Search is NOT triggered — user presses Enter or button.
 
 searchContainer.addEventListener('dragover', (e) => {
     e.preventDefault();
@@ -393,7 +411,6 @@ searchContainer.addEventListener('dragover', (e) => {
 });
 
 searchContainer.addEventListener('dragleave', (e) => {
-    // Only remove class if leaving the container entirely (not crossing a child)
     if (!searchContainer.contains(e.relatedTarget)) {
         searchContainer.classList.remove('drag-over');
     }
@@ -402,39 +419,35 @@ searchContainer.addEventListener('dragleave', (e) => {
 searchContainer.addEventListener('drop', async (e) => {
     e.preventDefault();
     searchContainer.classList.remove('drag-over');
-
-    // Focus the text input so the user can type (or just press Enter)
     searchInput.focus();
 
     try {
-        // Priority 1: image URL (from gallery drag or browser image drag)
         const uriList = e.dataTransfer.getData('text/uri-list')
                      || e.dataTransfer.getData('text/plain');
 
         if (uriList && uriList.trim()) {
-            const url = uriList.trim().split('\n')[0]; // take first URL if multiple
-            // Only accept same-origin URLs or relative paths to avoid CORS issues
+            const url = uriList.trim().split('\n')[0];
             const isLocal = url.startsWith('/') || url.startsWith(location.origin);
             if (isLocal) {
-                const resp  = await fetch(url);
-                const blob  = await resp.blob();
-                const b64   = await blobToBase64(blob);
-                setImageChip(url, b64);
+                const resp = await fetch(url);
+                const blob = await resp.blob();
+                const b64  = await blobToBase64(blob);
+                addImageChip(url, b64);
                 return;
             }
         }
 
-        // Priority 2: file dropped from OS
-        const file = e.dataTransfer.files && e.dataTransfer.files[0];
-        if (file && file.type.startsWith('image/')) {
-            const b64 = await blobToBase64(file);
-            const src = URL.createObjectURL(file);
-            setImageChip(src, b64);
-            return;
+        const files = e.dataTransfer.files;
+        if (files && files.length) {
+            for (const file of files) {
+                if (!file.type.startsWith('image/')) continue;
+                const b64 = await blobToBase64(file);
+                const src = URL.createObjectURL(file);
+                addImageChip(src, b64);
+            }
         }
 
     } catch (err) {
         console.error('Drop error:', err);
     }
 });
-

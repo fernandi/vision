@@ -67,21 +67,24 @@ body.has-results .search-container {
     outline-offset: -2px;
 }
 
-/* ── Image chip (reference image in search bar) ────────────────────────────── */
-.image-chip {
-    display: none;            /* hidden when no image */
+/* ── Image chips container (reference images in search bar) ──────────────────── */
+.image-chips-container {
+    display: flex;
     align-items: center;
-    gap: 0;
+    gap: 0.35rem;
+    flex-shrink: 0;
+    padding-left: 0.9rem;
+    /* hidden when empty — no children = no space */
+}
+
+.image-chip {
+    display: flex;
+    align-items: center;
     flex-shrink: 0;
     position: relative;
-    margin-left: 0.9rem;
 }
 
-.image-chip.visible {
-    display: flex;
-}
-
-#image-chip-thumb {
+.image-chip img {
     width: 28px;
     height: 28px;
     object-fit: cover;
@@ -91,7 +94,7 @@ body.has-results .search-container {
 }
 
 /* In hero mode, chip is bigger */
-body:not(.has-results) #image-chip-thumb {
+body:not(.has-results) .image-chip img {
     width: 38px;
     height: 38px;
 }
