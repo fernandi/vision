@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Visual Search</title>
-    <link rel="stylesheet" href="style.css?v=10">
+    <link rel="stylesheet" href="style.css?v=11">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -34,9 +34,71 @@
                 <span class="toggle-track">
                     <span class="toggle-thumb"></span>
                 </span>
-                <span class="toggle-label">BOOT DIVERSITY</span>
+                <span class="toggle-label">BOOST DIVERSITY</span>
             </button>
-            <!-- Future filters go here -->
+
+            <div class="filter-panel-separator"></div>
+
+            <!-- Combination mode -->
+            <div class="filter-section-label">COMBINATION MODE</div>
+            <div class="mode-radio-group" id="combination-mode-group">
+
+                <label class="mode-radio">
+                    <input type="radio" name="combination-mode" value="centroid" id="mode-centroid" checked>
+                    <span class="mode-radio-content">
+                        <span class="mode-symbol">ø</span>
+                        <span class="mode-info">
+                            <span class="mode-name">Barycentre</span>
+                            <span class="mode-desc">Vibe général de tous les éléments</span>
+                        </span>
+                    </span>
+                </label>
+
+                <label class="mode-radio">
+                    <input type="radio" name="combination-mode" value="intersection" id="mode-intersection">
+                    <span class="mode-radio-content">
+                        <span class="mode-symbol">∩</span>
+                        <span class="mode-info">
+                            <span class="mode-name">Intersection</span>
+                            <span class="mode-desc">Points communs à tous (∩)</span>
+                        </span>
+                    </span>
+                </label>
+
+                <label class="mode-radio">
+                    <input type="radio" name="combination-mode" value="union" id="mode-union">
+                    <span class="mode-radio-content">
+                        <span class="mode-symbol">∪</span>
+                        <span class="mode-info">
+                            <span class="mode-name">Union</span>
+                            <span class="mode-desc">Ressemble à l’un d’eux (∪)</span>
+                        </span>
+                    </span>
+                </label>
+
+                <label class="mode-radio">
+                    <input type="radio" name="combination-mode" value="pca" id="mode-pca">
+                    <span class="mode-radio-content">
+                        <span class="mode-symbol">≡</span>
+                        <span class="mode-info">
+                            <span class="mode-name">Composante commune</span>
+                            <span class="mode-desc">Axe partagé entre les éléments (ACP)</span>
+                        </span>
+                    </span>
+                </label>
+
+                <label class="mode-radio">
+                    <input type="radio" name="combination-mode" value="purified" id="mode-purified">
+                    <span class="mode-radio-content">
+                        <span class="mode-symbol">◎</span>
+                        <span class="mode-info">
+                            <span class="mode-name">Spécificité</span>
+                            <span class="mode-desc">Ce qui est unique à la requête</span>
+                        </span>
+                    </span>
+                </label>
+
+            </div>
         </div>
 
         <!-- Filter button: visible after first search, top-right -->
@@ -87,7 +149,7 @@
         </div>
         <div id="cluster-grid" class="cluster-grid"></div>
     </div>
-    <script src="app.js?v=10"></script>
+    <script src="app.js?v=11"></script>
 </body>
 
 </html>

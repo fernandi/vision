@@ -31,6 +31,7 @@ class VisualSearchEngine:
         self.denylist: set = set()  # faiss_ids to always suppress from results
         self.metadata_mapping = []
         self.load_error = None  # exposed via /health for debugging
+        self.corpus_mean = None  # unit-norm mean of a random sample of indexed vectors
 
         # LRU cache for pre-ranked result pools (avoids re-running CLIP+MMR on scroll)
         self._pool_cache: dict = {}   # key → list of metadata dicts (full pool)
@@ -134,9 +135,30 @@ class VisualSearchEngine:
 
         self._load_metadata()
         self._build_denylist()
+        self._compute_corpus_mean()
 
         n_indexed = self.index.ntotal
         print(f"Search Engine Ready. ({n_indexed} images indexed)")
+
+    def _compute_corpus_mean(self, n_sample: int = 2000):
+        """
+        Estimate the corpus mean by sampling n_sample random vectors from the index.
+        Used by the 'purified' combination mode to subtract the 'generic art' direction.
+        """
+        if self.index is None or self.index.ntotal == 0:
+            return
+        n_sample = min(n_sample, self.index.ntotal)
+        rng = np.random.default_rng(42)
+        sample_ids = rng.choice(self.index.ntotal, n_sample, replace=False)
+        sample_vecs = np.vstack(
+            [self.index.reconstruct(int(i)) for i in sample_ids]
+        ).astype('float32')
+        norms = np.linalg.norm(sample_vecs, axis=1, keepdims=True)
+        sample_vecs /= np.where(norms == 0, 1e-9, norms)
+        cm = sample_vecs.mean(axis=0)
+        norm_cm = np.linalg.norm(cm)
+        self.corpus_mean = (cm / (norm_cm + 1e-9)).astype('float32')
+        print(f"  ✓ corpus mean estimated (n={n_sample})")
 
     def _build_denylist(self):
         """
@@ -537,39 +559,46 @@ class VisualSearchEngine:
         self._pool_cache_order.append(key)
 
     def search(self, query_text, pool_size=200, page_size=20, offset=0, diversity=0.5,
-                image_embedding=None, image_weight=0.5):
+                image_embedding=None, image_weight=0.5,
+                combination_mode="centroid", individual_image_embeddings=None):
         """
         Paginated search with MMR diversity.
 
-        On the first call for a (query, diversity) pair, computes a full ranked
-        pool of up to `pool_size` results (CLIP encode + FAISS + MMR) and caches
-        it server-side. Subsequent offset calls just slice the cached pool —
-        no re-encoding or re-ranking.
+        On the first call for a (query, diversity, combination_mode) triple,
+        computes a full ranked pool of up to `pool_size` results and caches it
+        server-side. Subsequent offset calls just slice the cached pool.
 
         Args:
-            query_text:       natural language query (may be empty if image_embedding set)
-            pool_size:        total diverse results to pre-rank (default 200)
-            page_size:        results to return in this response (default 20)
-            offset:           starting index within the ranked pool (default 0)
-            diversity:        MMR lambda (0=relevance-only, 1=diversity-only)
-            image_embedding:  optional (1, D) float32 numpy array — normalised CLIP
-                              image vector to blend with the text query.
-            image_weight:     blend factor (0=text only, 1=image only). Default 0.5.
+            query_text:                  natural language query (may be empty)
+            pool_size:                   total diverse results to pre-rank (default 200)
+            page_size:                   results per response (default 20)
+            offset:                      pagination offset (default 0)
+            diversity:                   MMR lambda (0=relevance-only, 1=diversity-only)
+            image_embedding:             (1, D) float32 — averaged image embedding (legacy)
+            image_weight:                text/image blend for centroid mode (default 0.5)
+            combination_mode:            how query elements are combined:
+                'centroid'   — weighted average (default, current behaviour)
+                'intersection'— min-similarity across elements (AND logic)
+                'union'      — max-similarity across elements (OR logic)
+                'pca'        — first principal component of query matrix
+                'purified'   — query mean minus corpus mean (amplifies specific attributes)
+            individual_image_embeddings: list of (1, D) float32 arrays, one per image.
+                                         When provided, used instead of image_embedding.
         Returns:
             dict with keys: results (list), total (int), has_more (bool)
         """
         if not self.model:
             self.load()
 
-        # Cache key: include a compact hash of the image embedding when present
+        # --- Cache key ---
         img_hash = None
         if image_embedding is not None:
             img_hash = hash(image_embedding.tobytes())
-        cache_key = (query_text.strip().lower(), round(diversity, 2), img_hash)
+        cache_key = (query_text.strip().lower(), round(diversity, 2), img_hash, combination_mode)
         pool = self._pool_cache_get(cache_key)
 
         if pool is None:
-            # --- Encode query ---
+            # ── 1. Encode text ────────────────────────────────────────────────────
             if query_text.strip():
                 inputs = self.processor(text=[query_text], return_tensors="pt").to(self.device)
                 with torch.no_grad():
@@ -583,53 +612,149 @@ class VisualSearchEngine:
             else:
                 text_np = None
 
-            # --- Blend text + image when both present ---
-            if image_embedding is not None and text_np is not None:
-                # Weighted average in embedding space, then re-normalize
-                blended = (1.0 - image_weight) * text_np + image_weight * image_embedding
-                norm    = np.linalg.norm(blended, axis=1, keepdims=True)
+            # ── 2. Build list of all normalised query vectors ─────────────────────
+            # Each element is a (1, D) float32 array
+            all_query_vecs = []
+            if text_np is not None:
+                all_query_vecs.append(text_np)
+            if individual_image_embeddings:          # preferred: per-image embeddings
+                all_query_vecs.extend(individual_image_embeddings)
+            elif image_embedding is not None:        # legacy: pre-averaged embedding
+                all_query_vecs.append(image_embedding)
+
+            if not all_query_vecs:
+                return {"results": [], "total": 0, "has_more": False}
+
+            n_els = len(all_query_vecs)
+
+            # ── 3. Compute combined query embedding ───────────────────────────────
+            valid_ids   = None   # set by intersection/union paths
+            score_by_id = None
+            text_embedding = None  # single (1, D) query vector for FAISS + MMR
+
+            if n_els == 1:
+                # Only one element — all modes are equivalent
+                text_embedding = all_query_vecs[0]
+
+            elif combination_mode == "centroid":
+                # Weighted blend: text vs images, then normalise
+                if text_np is not None and individual_image_embeddings:
+                    avg_img = np.mean(
+                        np.concatenate(individual_image_embeddings, axis=0), axis=0, keepdims=True
+                    )
+                    blended = (1.0 - image_weight) * text_np + image_weight * avg_img
+                else:
+                    stacked = np.concatenate(all_query_vecs, axis=0)  # (N, D)
+                    blended = stacked.mean(axis=0, keepdims=True)
+                norm = np.linalg.norm(blended, axis=1, keepdims=True)
                 text_embedding = (blended / np.where(norm == 0, 1e-9, norm)).astype('float32')
-            elif image_embedding is not None:
-                # Image-only query
-                text_embedding = image_embedding.astype('float32')
+
+            elif combination_mode == "pca":
+                # First principal component of the query matrix
+                stacked = np.concatenate(all_query_vecs, axis=0)  # (N, D)
+                _, _, Vt = np.linalg.svd(stacked, full_matrices=False)
+                pc1 = Vt[0:1]  # (1, D)
+                # Align sign so most query vectors have a positive dot product
+                if float((stacked @ pc1.T).mean()) < 0:
+                    pc1 = -pc1
+                text_embedding = (
+                    pc1 / (np.linalg.norm(pc1, axis=1, keepdims=True) + 1e-9)
+                ).astype('float32')
+
+            elif combination_mode == "purified":
+                # Query mean minus a fraction of the corpus mean.
+                # Amplifies dimensions specific to the query and suppresses
+                # generic 'art image' dimensions present in the whole dataset.
+                stacked = np.concatenate(all_query_vecs, axis=0)
+                mean_vec = stacked.mean(axis=0, keepdims=True)
+                if self.corpus_mean is not None:
+                    mean_vec = mean_vec - 0.4 * self.corpus_mean[np.newaxis, :]
+                norm = np.linalg.norm(mean_vec, axis=1, keepdims=True)
+                text_embedding = (mean_vec / np.where(norm == 0, 1e-9, norm)).astype('float32')
+
+            elif combination_mode in ("intersection", "union"):
+                # Gather candidates from centroid search + per-element searches,
+                # then re-score by min (AND) or max (OR) similarity.
+                stacked = np.concatenate(all_query_vecs, axis=0)
+                mean_vec = stacked.mean(axis=0, keepdims=True)
+                norm = np.linalg.norm(mean_vec, axis=1, keepdims=True)
+                centroid_vec = (mean_vec / np.where(norm == 0, 1e-9, norm)).astype('float32')
+
+                fetch_k   = min(pool_size * 3, self.index.ntotal)
+                per_el_k  = max(100, fetch_k // n_els)
+                cand_set  = set()
+
+                # Centroid sweep
+                _, idx0 = self.index.search(centroid_vec, fetch_k)
+                cand_set.update(
+                    int(i) for i in idx0[0] if i >= 0 and int(i) not in self.denylist
+                )
+                # Per-element sweeps
+                for ev in all_query_vecs:
+                    _, idx_e = self.index.search(ev, per_el_k)
+                    cand_set.update(
+                        int(i) for i in idx_e[0] if i >= 0 and int(i) not in self.denylist
+                    )
+
+                valid_raw = list(cand_set)
+
+                # Reconstruct + normalise candidate vectors
+                cand_vecs = np.vstack(
+                    [self.index.reconstruct(int(fid)) for fid in valid_raw]
+                ).astype('float32')                          # (M, D)
+                norms_c = np.linalg.norm(cand_vecs, axis=1, keepdims=True)
+                cand_vecs /= np.where(norms_c == 0, 1e-9, norms_c)
+
+                # Similarity of every candidate to every query element: (M, N_q)
+                query_mat = np.concatenate(all_query_vecs, axis=0)  # (N_q, D)
+                sim_mat   = cand_vecs @ query_mat.T                  # (M, N_q)
+
+                if combination_mode == "intersection":
+                    scores = sim_mat.min(axis=1)   # (M,) — must satisfy ALL
+                else:
+                    scores = sim_mat.max(axis=1)   # (M,) — satisfies ANY
+
+                order       = np.argsort(-scores)
+                valid_ids   = [valid_raw[i] for i in order]
+                score_by_id = {valid_raw[i]: float(scores[i]) for i in range(len(valid_raw))}
+                text_embedding = centroid_vec    # used for MMR diversity scoring
+
             else:
-                text_embedding = text_np
+                # Unknown mode: fall back to simple mean
+                stacked = np.concatenate(all_query_vecs, axis=0)
+                mean_vec = stacked.mean(axis=0, keepdims=True)
+                norm = np.linalg.norm(mean_vec, axis=1, keepdims=True)
+                text_embedding = (mean_vec / np.where(norm == 0, 1e-9, norm)).astype('float32')
 
-            # --- FAISS search: over-fetch for both MMR headroom and Voronoi clustering ---
-            # Always fetch 3× candidates so the no-diversity mode can also compute
-            # Voronoi cluster sizes (near-duplicates not shown in the top-N).
-            fetch_k = min(pool_size * 3, self.index.ntotal)
-            distances, indices = self.index.search(text_embedding, fetch_k)
+            # ── 4. FAISS search (skipped for intersection/union — already done) ──
+            if valid_ids is None:
+                fetch_k = min(pool_size * 3, self.index.ntotal)
+                distances, indices = self.index.search(text_embedding, fetch_k)
+                valid_ids = [
+                    int(idx) for idx in indices[0]
+                    if idx >= 0 and int(idx) not in self.denylist
+                ]
+                score_by_id = {
+                    int(idx): float(distances[0][i])
+                    for i, idx in enumerate(indices[0])
+                    if idx >= 0 and int(idx) not in self.denylist
+                }
 
-            valid_ids = [
-                int(idx) for idx in indices[0]
-                if idx >= 0 and int(idx) not in self.denylist
-            ]
-            score_by_id = {
-                int(idx): float(distances[0][i])
-                for i, idx in enumerate(indices[0])
-                if idx >= 0 and int(idx) not in self.denylist
-            }
-
-            # --- Rank / re-rank to pool_size ---
+            # ── 5. Rank / re-rank to pool_size ───────────────────────────────────
             cluster_sizes   = {}   # faiss_id → Voronoi count
             cluster_members = {}   # faiss_id → [faiss_ids in cluster]
 
             if diversity > 0.0 and len(valid_ids) > pool_size:
-                # MMR: selects diverse pool, then dedup+Voronoi inside (one shot, zero
-                # extra reconstruction — inter_sim is already computed during MMR)
                 selected_ids, cluster_sizes, cluster_members = self._mmr_rerank(
                     text_embedding[0], valid_ids, score_by_id, pool_size, diversity
                 )
             else:
-                # Pure relevance: top-N by FAISS score
                 selected_ids = valid_ids[:pool_size]
-                # Dedup within pool + Voronoi on over-fetched candidates
                 if len(valid_ids) > pool_size:
                     selected_ids, cluster_sizes, cluster_members = \
                         self._deduplicate_and_voronoi(selected_ids, valid_ids, score_by_id)
 
-            # --- Fetch all metadata for the pool ---
+            # ── 6. Fetch metadata for the pool ───────────────────────────────────
             meta_by_id = self._lookup_metadata(selected_ids)
             pool = []
             for fid in selected_ids:
@@ -639,12 +764,10 @@ class VisualSearchEngine:
                 item['score'] = score_by_id.get(fid, 0.0)
                 if cluster_sizes:
                     item['cluster_size']       = cluster_sizes.get(fid, 1)
-                    # Sort members by FAISS score (descending) so most
-                    # relevant image in each cluster comes first
                     members = cluster_members.get(fid, [fid])
-                    members_sorted = sorted(members,
-                                           key=lambda x: score_by_id.get(x, 0.0),
-                                           reverse=True)
+                    members_sorted = sorted(
+                        members, key=lambda x: score_by_id.get(x, 0.0), reverse=True
+                    )
                     item['cluster_member_ids'] = members_sorted
                 pool.append(item)
 

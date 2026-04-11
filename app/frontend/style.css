@@ -59,6 +59,7 @@ body.has-results .search-container {
     width: 100%;
     max-width: none;
     background-color: white;
+    height: 100%;
 }
 
 /* Drag-over highlight */
@@ -70,6 +71,7 @@ body.has-results .search-container {
 
 /* ── Image chips container (reference images in search bar) ──────────────────── */
 .image-chips-container {
+    height: 100%;
     display: flex;
     align-items: center;
     gap: 0.35rem;
@@ -79,6 +81,7 @@ body.has-results .search-container {
 }
 
 .image-chip {
+    height: 100%;
     display: flex;
     align-items: center;
     flex-shrink: 0;
@@ -86,8 +89,7 @@ body.has-results .search-container {
 }
 
 .image-chip img {
-    width: 28px;
-    height: 28px;
+    height: 80%;
     object-fit: cover;
     border-radius: 2px;
     display: block;
@@ -761,36 +763,48 @@ body.has-results .filter-btn {
 
 /* ── Filter panel ─────────────────────────────────────────────────────────── */
 .filter-panel {
-    width: 0;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    min-width: 230px;
     z-index: 900;
     /* below lightboxes, above gallery */
     background: var(--bg-accent);
     display: flex;
     flex-direction: column;
-    gap: 0.8rem;
+    gap: 0.5rem;
     /* Hidden by default */
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.18s ease, transform 0.18s ease, width 0.18s ease;
+    transform: translateY(-6px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 
 .filter-panel.open {
-    width: auto;
     opacity: 1;
     pointer-events: auto;
     transform: translateY(0);
-    padding: 0.7rem 1.2rem;
+    padding: 0.85rem 1rem;
 }
 
 /* Section label inside panel */
+.filter-section-label,
 .filter-panel-label {
-    font-size: 0.6rem;
-    font-weight: 600;
-    letter-spacing: 0.12em;
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
     color: #000;
-    opacity: 0.35;
-    margin-bottom: 0.1rem;
+    opacity: 0.3;
+    margin-bottom: 0.05rem;
+}
+
+/* Separator line between sections */
+.filter-panel-separator {
+    height: 1px;
+    background: rgba(0, 0, 0, 0.1);
+    margin: 0.25rem 0;
 }
 
 /* The pill track */
@@ -853,4 +867,84 @@ body.has-results .filter-btn {
 /* Dim label when diversity is off */
 .diversity-toggle[aria-pressed="false"] .toggle-label {
     opacity: 0.35;
+}
+
+/* ── Combination mode radio group ────────────────────────────────────────── */
+.mode-radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.mode-radio {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    border-radius: 3px;
+    padding: 0.1rem 0;
+    transition: background 0.12s;
+}
+
+.mode-radio:hover {
+    background: rgba(0, 0, 0, 0.04);
+}
+
+/* Hide native radio button */
+.mode-radio input[type="radio"] {
+    display: none;
+}
+
+/* Content row: symbol + info */
+.mode-radio-content {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.2rem 0.35rem;
+    opacity: 0.35;
+    transition: opacity 0.15s;
+    width: 100%;
+}
+
+/* Highlight active selection */
+.mode-radio:has(input:checked) .mode-radio-content {
+    opacity: 1;
+}
+
+.mode-symbol {
+    font-size: 1rem;
+    font-weight: 300;
+    color: #000;
+    width: 1.2em;
+    text-align: center;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.mode-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.08rem;
+    min-width: 0;
+}
+
+.mode-name {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.63rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: #000;
+    text-transform: uppercase;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.mode-desc {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.58rem;
+    font-weight: 400;
+    color: #000;
+    opacity: 0.55;
+    line-height: 1.3;
+    font-style: italic;
+    white-space: nowrap;
 }

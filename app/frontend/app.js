@@ -14,6 +14,12 @@ function getDiversity() {
     return diversityToggle.getAttribute('aria-pressed') === 'true' ? 0.5 : 0.0;
 }
 
+// Current combination mode: read from radio group
+function getCombinationMode() {
+    const checked = document.querySelector('input[name="combination-mode"]:checked');
+    return checked ? checked.value : 'centroid';
+}
+
 // ── State ──────────────────────────────────────────────────────────────────────
 let currentQuery  = "";
 let currentOffset = 0;
@@ -74,10 +80,11 @@ async function loadNextPage(firstPage = false) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                query:           currentQuery,
-                page_size:       PAGE_SIZE,
-                offset:          currentOffset,
-                diversity:       getDiversity(),
+                query:            currentQuery,
+                page_size:        PAGE_SIZE,
+                offset:           currentOffset,
+                diversity:        getDiversity(),
+                combination_mode: getCombinationMode(),
                 ...(referenceImages.length
                     ? { reference_images: referenceImages.map(r => r.base64), image_weight: 0.5 }
                     : {}),
@@ -319,6 +326,13 @@ diversityToggle.addEventListener('click', () => {
     const isOn = diversityToggle.getAttribute('aria-pressed') === 'true';
     diversityToggle.setAttribute('aria-pressed', isOn ? 'false' : 'true');
     if (currentQuery) search(currentQuery);
+});
+
+// ── Combination mode radios ──────────────────────────────────────────────────────
+document.querySelectorAll('input[name="combination-mode"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+        if (currentQuery) search(currentQuery);
+    });
 });
 
 

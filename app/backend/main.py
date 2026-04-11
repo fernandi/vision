@@ -79,6 +79,7 @@ class SearchRequest(BaseModel):
     reference_image: Optional[str] = None        # single base64 image (legacy)
     reference_images: Optional[List[str]] = None # multiple base64 images
     image_weight: Optional[float] = 0.5          # blend factor: 0=text only, 1=image only
+    combination_mode: Optional[str] = "centroid" # how query elements are combined
 
 # Routes
 @app.get("/health")
@@ -103,6 +104,7 @@ def search(req: SearchRequest):
 
         # Collect all reference images (supports list or legacy single)
         image_embedding = None
+        individual_image_embeddings = []   # per-image normalized (1, D) arrays
         b64_list = req.reference_images or ([req.reference_image] if req.reference_image else [])
         if b64_list:
             from PIL import Image
@@ -111,7 +113,6 @@ def search(req: SearchRequest):
             processor = search_engine.processor
             model     = search_engine.model
             device    = search_engine.device
-            embeddings = []
             for b64 in b64_list:
                 img_data = base64.b64decode(b64)
                 img = Image.open(io.BytesIO(img_data)).convert("RGB")
@@ -123,11 +124,13 @@ def search(req: SearchRequest):
                 else:
                     feat = output
                 feat = feat / feat.norm(p=2, dim=-1, keepdim=True)
-                embeddings.append(feat.cpu().numpy().astype("float32"))
-            # Average and re-normalize (works for N=1 too)
-            avg  = np.mean(np.stack(embeddings, axis=0), axis=0)          # (1, D)
-            norm = np.linalg.norm(avg, axis=1, keepdims=True)
-            image_embedding = (avg / np.where(norm == 0, 1e-9, norm)).astype("float32")
+                individual_image_embeddings.append(feat.cpu().numpy().astype("float32"))  # (1, D)
+            # Averaged embedding (kept for legacy cache key hashing)
+            if individual_image_embeddings:
+                import numpy as np
+                avg  = np.mean(np.stack(individual_image_embeddings, axis=0), axis=0)
+                norm = np.linalg.norm(avg, axis=1, keepdims=True)
+                image_embedding = (avg / np.where(norm == 0, 1e-9, norm)).astype("float32")
 
         n_imgs = len(b64_list)
         data = search_engine.search(
@@ -138,6 +141,8 @@ def search(req: SearchRequest):
             diversity=req.diversity,
             image_embedding=image_embedding,
             image_weight=req.image_weight,
+            combination_mode=req.combination_mode or "centroid",
+            individual_image_embeddings=individual_image_embeddings or None,
         )
         elapsed = time.time() - t0
         mode = f"text+{n_imgs}img" if n_imgs else "text"
