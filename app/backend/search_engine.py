@@ -306,6 +306,12 @@ class VisualSearchEngine:
             cluster_sizes[sid]   = cluster_sizes.get(sid, 0) + 1
             cluster_members[sid].append(cfid)
 
+        # ── Cap cluster sizes (promotes overflow to new gallery cards) ────────────
+        id_to_local = {fid: i for i, fid in enumerate(candidate_ids)}
+        deduped_ids, cluster_sizes, cluster_members = self._cap_cluster_sizes(
+            deduped_ids, vecs, id_to_local, cluster_sizes, cluster_members, candidate_scores
+        )
+
         return deduped_ids, cluster_sizes, cluster_members
 
     def _deduplicate_and_voronoi(self, selected_ids, all_candidate_ids, score_by_id,
@@ -402,7 +408,116 @@ class VisualSearchEngine:
             cluster_sizes[sid]   = cluster_sizes.get(sid, 0) + 1
             cluster_members[sid].append(cfid)
 
+        # ── Cap cluster sizes (promotes overflow to new gallery cards) ────────────
+        deduped_ids, cluster_sizes, cluster_members = self._cap_cluster_sizes(
+            deduped_ids, all_vecs, id_to_local, cluster_sizes, cluster_members, score_by_id
+        )
+
         return deduped_ids, cluster_sizes, cluster_members
+
+    def _cap_cluster_sizes(
+        self, deduped_ids, all_vecs, id_to_local,
+        cluster_sizes, cluster_members, score_by_id,
+        max_size=15, very_high_threshold=0.97
+    ):
+        """
+        Ensure no Voronoi cluster has more than `max_size` members by
+        recursively promoting overflow members as new gallery centroids.
+
+        Exception: members whose cosine similarity to the centroid exceeds
+        `very_high_threshold` (true duplicates — exact scans/copies of the
+        same artwork) are never counted against the cap and always stay
+        grouped together.
+
+        Promoted centroids are appended to deduped_ids so they appear as
+        additional gallery cards; no images are silently discarded.
+
+        Args:
+            deduped_ids:         current list of centroid faiss_ids.
+            all_vecs:            normalised embedding matrix (M, D) for the
+                                 full candidate pool. Must include rows for
+                                 every id in cluster_members values.
+            id_to_local:         {faiss_id: row_index_in_all_vecs}.
+            cluster_sizes:       {centroid_id: int}.
+            cluster_members:     {centroid_id: [faiss_id, ...]}.
+            score_by_id:         {faiss_id: float} FAISS cosine score.
+            max_size:            maximum cluster members (default 15).
+            very_high_threshold: sim above which a member is a 'true copy'
+                                 and ignored by the cap (default 0.97).
+        Returns:
+            (deduped_ids, cluster_sizes, cluster_members) with all clusters
+            satisfying len(members) ≤ max_size (or all members are true copies).
+        """
+        result_ids    = list(deduped_ids)
+        result_sizes  = dict(cluster_sizes)
+        result_members = {sid: list(ms) for sid, ms in cluster_members.items()}
+
+        to_check = list(deduped_ids)   # queue of centroids to inspect
+
+        while to_check:
+            sid = to_check.pop(0)
+            members = result_members.get(sid, [])
+
+            if len(members) <= max_size:
+                continue
+
+            # Similarity of each member to centroid
+            c_vec      = all_vecs[id_to_local[sid]]
+            m_vecs     = np.array([all_vecs[id_to_local[m]] for m in members])  # (K, D)
+            m_sims     = (m_vecs @ c_vec).tolist()                               # (K,)
+
+            very_high  = [(m, s) for m, s in zip(members, m_sims)
+                          if s > very_high_threshold]
+            regular    = [(m, s) for m, s in zip(members, m_sims)
+                          if s <= very_high_threshold]
+
+            cap = max(0, max_size - len(very_high))
+            if len(regular) <= cap:
+                # Nothing to do (all overflow is very-high-sim)
+                result_members[sid] = [m for m, _ in very_high] + [m for m, _ in regular]
+                result_sizes[sid]   = len(result_members[sid])
+                continue
+
+            # Sort regular by similarity to centroid: keep the most similar ones
+            regular_sorted  = sorted(regular, key=lambda x: x[1], reverse=True)
+            kept            = regular_sorted[:cap]
+            overflow        = regular_sorted[cap:]   # excess — need new centroid
+
+            # Update original cluster
+            result_members[sid] = [m for m, _ in very_high] + [m for m, _ in kept]
+            result_sizes[sid]   = len(result_members[sid])
+
+            # Promote the highest-scoring (by FAISS relevance) overflow member
+            overflow_by_score   = sorted(overflow,
+                                         key=lambda x: score_by_id.get(x[0], 0.0),
+                                         reverse=True)
+            new_cid             = overflow_by_score[0][0]
+            remaining_overflow  = [m for m, _ in overflow_by_score[1:]]
+
+            # Assign remaining overflow to whichever centroid (original / new) is closer
+            new_c_vec  = all_vecs[id_to_local[new_cid]]
+            new_members = [new_cid]
+            for rm in remaining_overflow:
+                rv = all_vecs[id_to_local[rm]]
+                if float(rv @ new_c_vec) >= float(rv @ c_vec):
+                    new_members.append(rm)
+                else:
+                    result_members[sid].append(rm)
+                    result_sizes[sid] += 1
+
+            result_members[new_cid] = new_members
+            result_sizes[new_cid]   = len(new_members)
+
+            if new_cid not in result_ids:
+                result_ids.append(new_cid)
+
+            # Re-check both if still too large
+            if result_sizes[sid] > max_size:
+                to_check.append(sid)
+            if result_sizes[new_cid] > max_size:
+                to_check.append(new_cid)
+
+        return result_ids, result_sizes, result_members
 
     def _pool_cache_get(self, key):
         if key in self._pool_cache:
