@@ -253,8 +253,10 @@ class VisualSearchEngine:
         # ── Pass 1 : Union-Find deduplication on MMR-selected pool ──────────────
         # inter_sim[i,j] is already computed above. Use it to merge near-duplicates
         # that slipped through MMR (can happen at lower λ values).
-        # dup_threshold=0.935: catches same artwork in different reproductions.
-        dup_threshold = 0.935
+        # dup_threshold=0.90: calibrated against real data — catches same artwork in
+        # different reproductions (sim ≈ 0.91-0.95) without merging merely "similar"
+        # scenes (which sit at ≈ 0.84-0.88).
+        dup_threshold = 0.90
         n_sel = len(selected)
         # Sub-matrix: similarity among MMR-selected items (S × S)
         sim_sel = inter_sim[np.ix_(selected, selected)]  # (S, S)
@@ -307,7 +309,7 @@ class VisualSearchEngine:
         return deduped_ids, cluster_sizes, cluster_members
 
     def _deduplicate_and_voronoi(self, selected_ids, all_candidate_ids, score_by_id,
-                                  dup_threshold=0.935):
+                                  dup_threshold=0.90):
         """
         Two-pass clustering that fixes near-duplicates appearing in the displayed pool.
 
