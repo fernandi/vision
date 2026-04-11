@@ -239,12 +239,7 @@ function appendCards(results) {
             e.dataTransfer.setData('text/plain',    imgPath);
         });
 
-        // ── Card click → lightbox ─────────────────────────────────────────────────
-        card.addEventListener('click', () => {
-            openLightbox(imgPath, title, item.Author, item.source,
-                hasGroup ? item.cluster_member_ids : null,
-                hasGroup ? item.cluster_size       : null);
-        });
+
 
         gallery.appendChild(card);
     });
