@@ -10,6 +10,7 @@ import base64
 import io
 
 from app.backend.search_engine import VisualSearchEngine
+from app.backend.auth import router as auth_router
 
 ENV = os.environ.get("ENV", "local")
 HF_SOURCE_DATASET = os.environ.get("HF_SOURCE_DATASET", "Mitsua/art-museums-pd-440k")
@@ -42,6 +43,7 @@ app.add_middleware(
 # Search Engine Instance
 search_engine = VisualSearchEngine()
 _load_lock = __import__("threading").Lock()
+app.include_router(auth_router)
 
 def ensure_loaded():
     """Load the search engine lazily on first request."""
@@ -79,7 +81,9 @@ class SearchRequest(BaseModel):
     reference_image: Optional[str] = None        # single base64 image (legacy)
     reference_images: Optional[List[str]] = None # multiple base64 images
     image_weight: Optional[float] = 0.5          # blend factor: 0=text only, 1=image only
-    combination_mode: Optional[str] = "centroid" # how query elements are combined
+    combination_mode: Optional[str] = "purified" # how query elements are combined
+    negative_images: Optional[List[str]] = None  # base64 negative images
+    negative_mode: Optional[str] = "directed"    # directed | orthogonal | penalty
 
 # Routes
 @app.get("/health")
@@ -132,6 +136,21 @@ def search(req: SearchRequest):
                 norm = np.linalg.norm(avg, axis=1, keepdims=True)
                 image_embedding = (avg / np.where(norm == 0, 1e-9, norm)).astype("float32")
 
+        # ── Process negative images ──
+        negative_embeddings = []
+        for b64 in (req.negative_images or []):
+            img_data = base64.b64decode(b64)
+            img = Image.open(io.BytesIO(img_data)).convert("RGB")
+            inputs = processor(images=img, return_tensors="pt").to(device)
+            with torch.no_grad():
+                output = model.get_image_features(**inputs)
+            if not isinstance(output, torch.Tensor):
+                feat = output.pooler_output if hasattr(output, "pooler_output") else output.last_hidden_state[:, 0]
+            else:
+                feat = output
+            feat = feat / feat.norm(p=2, dim=-1, keepdim=True)
+            negative_embeddings.append(feat.cpu().numpy().astype("float32"))
+
         n_imgs = len(b64_list)
         data = search_engine.search(
             req.query,
@@ -141,8 +160,10 @@ def search(req: SearchRequest):
             diversity=req.diversity,
             image_embedding=image_embedding,
             image_weight=req.image_weight,
-            combination_mode=req.combination_mode or "centroid",
+            combination_mode=req.combination_mode or "purified",
             individual_image_embeddings=individual_image_embeddings or None,
+            negative_embeddings=negative_embeddings or None,
+            negative_mode=req.negative_mode or "directed",
         )
         elapsed = time.time() - t0
         mode = f"text+{n_imgs}img" if n_imgs else "text"

@@ -6,16 +6,45 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Visual Search</title>
-    <link rel="stylesheet" href="style.css?v=13">
+    <link rel="stylesheet" href="style.css?v=14">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 </head>
 
 <body>
-    <!-- Saved images strip: fixed black bar above header -->
+    <!-- Pinbar: fixed black strip above header -->
     <div id="saved-panel">
-        <div id="saved-thumbs"></div>
+        <!-- Compact bar (always shown when has-saved) -->
+        <div id="pinbar-bar">
+            <div id="saved-thumbs"></div>
+            <div class="pinbar-actions" id="pinbar-actions">
+                <button id="pinbar-use-search-btn" title="Use all pinned images for search">USE FOR SEARCH</button>
+                <button id="pinbar-new-btn" title="New board">NEW</button>
+                <button id="pinbar-expand-btn" title="Expand / Collapse boards">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="7 9 12 4 17 9"/><polyline points="17 15 12 20 7 15"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <!-- Expanded boards view -->
+        <div id="pinbar-expanded-view">
+            <div class="pinbar-exp-header">
+                <span class="pinbar-exp-title">BOARDS</span>
+                <button id="pinbar-collapse-btn">↕ COLLAPSE</button>
+            </div>
+            <div id="pinbar-boards-list"></div>
+            <!-- Auth area -->
+            <div id="pinbar-auth-area">
+                <div id="pinbar-auth-form">
+                    <span class="pinbar-auth-hint">Sign in to sync your boards</span>
+                    <input type="email" id="pinbar-email-input" placeholder="your@email.com">
+                    <button id="pinbar-magic-btn">SEND LINK</button>
+                </div>
+                <div id="pinbar-auth-status" hidden></div>
+            </div>
+        </div>
     </div>
 
     <header>
@@ -23,6 +52,19 @@
             <!-- Image chips: populated dynamically when images are dropped -->
             <div id="image-chips-container" class="image-chips-container"></div>
             <input type="text" id="search-input" placeholder="FISHING BY NIGHT" autofocus>
+            <!-- Clear-all button -->
+            <div id="search-clear-area">
+                <button id="clear-all-btn" title="Tout effacer" aria-label="Tout effacer">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+                <button id="undo-clear-btn" title="Annuler" aria-label="Annuler" style="display:none">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/>
+                    </svg>
+                </button>
+            </div>
             <button id="search-btn" aria-label="Search">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -49,7 +91,7 @@
             <div class="mode-radio-group" id="combination-mode-group">
 
                 <label class="mode-radio">
-                    <input type="radio" name="combination-mode" value="centroid" id="mode-centroid" checked>
+                    <input type="radio" name="combination-mode" value="centroid" id="mode-centroid">
                     <span class="mode-radio-content">
                         <span class="mode-symbol">ø</span>
                         <span class="mode-info">
@@ -93,7 +135,7 @@
                 </label>
 
                 <label class="mode-radio">
-                    <input type="radio" name="combination-mode" value="purified" id="mode-purified">
+                    <input type="radio" name="combination-mode" value="purified" id="mode-purified" checked>
                     <span class="mode-radio-content">
                         <span class="mode-symbol">◎</span>
                         <span class="mode-info">
@@ -103,6 +145,43 @@
                     </span>
                 </label>
 
+            </div>
+
+            <div id="negative-mode-section" hidden>
+                <div class="filter-panel-separator"></div>
+                <div class="filter-section-label">NEGATIVE MODE</div>
+                <div class="mode-radio-group" id="negative-mode-group">
+                    <label class="mode-radio">
+                        <input type="radio" name="negative-mode" value="directed" id="neg-directed" checked>
+                        <span class="mode-radio-content">
+                            <span class="mode-symbol">⊖</span>
+                            <span class="mode-info">
+                                <span class="mode-name">Soustraction dirigée</span>
+                                <span class="mode-desc">Retire ce qui distingue le négatif</span>
+                            </span>
+                        </span>
+                    </label>
+                    <label class="mode-radio">
+                        <input type="radio" name="negative-mode" value="orthogonal" id="neg-orthogonal">
+                        <span class="mode-radio-content">
+                            <span class="mode-symbol">⊥</span>
+                            <span class="mode-info">
+                                <span class="mode-name">Projection orthogonale</span>
+                                <span class="mode-desc">Efface la composante négative</span>
+                            </span>
+                        </span>
+                    </label>
+                    <label class="mode-radio">
+                        <input type="radio" name="negative-mode" value="penalty" id="neg-penalty">
+                        <span class="mode-radio-content">
+                            <span class="mode-symbol">↓</span>
+                            <span class="mode-info">
+                                <span class="mode-name">Pénalité de score</span>
+                                <span class="mode-desc">Pénalise ce qui ressemble au négatif</span>
+                            </span>
+                        </span>
+                    </label>
+                </div>
             </div>
         </div>
 
@@ -157,7 +236,7 @@
         </div>
         <div id="cluster-grid" class="cluster-grid"></div>
     </div>
-    <script src="app.js?v=13"></script>
+    <script src="app.js?v=14"></script>
 </body>
 
 </html>

@@ -1120,3 +1120,346 @@ body.has-saved #saved-panel {
 .saved-thumb:hover .saved-thumb-remove {
     opacity: 1;
 }
+
+/* ── Pinbar restructure ─────────────────────────────────────────────────────── */
+#pinbar-bar {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    padding: 0 0.55rem;
+    gap: 0;
+}
+
+/* Actions (USE FOR SEARCH / NEW / ↕) — hidden until pinbar hover */
+.pinbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-left: auto;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+#saved-panel:hover .pinbar-actions {
+    opacity: 1;
+}
+
+.pinbar-actions button {
+    background: none;
+    border: none;
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    padding: 0.25rem 0.4rem;
+    opacity: 0.65;
+    transition: opacity 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.pinbar-actions button:hover { opacity: 1; }
+
+/* Expanded view */
+#pinbar-expanded-view {
+    display: none;
+    flex-direction: column;
+    width: 100%;
+    height: calc(100% - var(--saved-panel-h));
+    overflow-y: auto;
+    padding: 1.2rem 2rem 2rem;
+    scrollbar-width: thin;
+    scrollbar-color: #444 #000;
+}
+
+body.pinbar-expanded #pinbar-expanded-view { display: flex; }
+body.pinbar-expanded #saved-panel { height: 100vh; overflow: hidden; }
+body.pinbar-expanded #pinbar-bar { height: var(--saved-panel-h); flex-shrink: 0; }
+
+/* Push header under expanded panel */
+body.pinbar-expanded header { top: 100vh; }
+body.pinbar-expanded .gallery { display: none; }
+
+.pinbar-exp-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid #333;
+}
+
+.pinbar-exp-title {
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    opacity: 0.5;
+}
+
+#pinbar-collapse-btn {
+    background: none;
+    border: none;
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: opacity 0.15s;
+}
+#pinbar-collapse-btn:hover { opacity: 1; }
+
+/* Board rows in expanded view */
+.pinbar-board-row {
+    margin-bottom: 1.2rem;
+}
+
+.pinbar-board-label {
+    color: #fff;
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    opacity: 0.4;
+    margin-bottom: 0.5rem;
+}
+
+.pinbar-board-thumbs {
+    display: flex;
+    gap: 0.4rem;
+    overflow-x: auto;
+    padding-bottom: 0.3rem;
+    scrollbar-width: none;
+}
+.pinbar-board-thumbs::-webkit-scrollbar { display: none; }
+
+.pinbar-board-thumb {
+    width: 80px;
+    height: 80px;
+    flex-shrink: 0;
+    object-fit: cover;
+    border-radius: 2px;
+    opacity: 0.75;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+.pinbar-board-thumb:hover { opacity: 1; }
+
+/* Auth area */
+#pinbar-auth-area {
+    margin-top: auto;
+    padding-top: 1.5rem;
+    border-top: 1px solid #222;
+}
+
+.pinbar-auth-hint {
+    display: block;
+    color: #fff;
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    opacity: 0.35;
+    margin-bottom: 0.6rem;
+}
+
+#pinbar-auth-form {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+#pinbar-email-input {
+    background: #111;
+    border: 1px solid #333;
+    border-radius: 3px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.7rem;
+    padding: 0.3rem 0.6rem;
+    width: 200px;
+    outline: none;
+}
+#pinbar-email-input:focus { border-color: #666; }
+
+#pinbar-magic-btn {
+    background: #fff;
+    border: none;
+    border-radius: 3px;
+    color: #000;
+    font-family: inherit;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 0.35rem 0.7rem;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+#pinbar-magic-btn:hover { opacity: 0.8; }
+
+#pinbar-auth-status {
+    color: #fff;
+    font-size: 0.65rem;
+    opacity: 0.6;
+    margin-top: 0.4rem;
+}
+
+/* ── Clear-all button ───────────────────────────────────────────────────────── */
+#search-clear-area {
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+    opacity: 0;
+    transition: opacity 0.18s;
+    flex-shrink: 0;
+}
+
+.search-container:hover #search-clear-area,
+.search-container.has-content #search-clear-area { opacity: 1; }
+
+#clear-all-btn,
+#undo-clear-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.2rem;
+    color: #888;
+    display: flex;
+    align-items: center;
+    transition: color 0.15s;
+    border-radius: 50%;
+}
+#clear-all-btn:hover,
+#undo-clear-btn:hover { color: #000; }
+
+/* ── Hide overlay (ne plus voir) — 3rd card action button ───────────────────── */
+/* .card-action-hide inherits all styles from .card-action-btn */
+.hide-overlay {
+    position: absolute;
+    inset: 0;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    padding: 0.5rem;
+    z-index: 20;
+    border: 1px solid rgba(0,0,0,0.08);
+}
+
+.hide-overlay-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.4rem;
+}
+
+.hide-undo-btn,
+.hide-skip-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.55rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #000;
+    opacity: 0.4;
+    padding: 0;
+    transition: opacity 0.15s;
+}
+.hide-undo-btn:hover,
+.hide-skip-btn:hover { opacity: 1; }
+
+.hide-timer-area {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+/* SVG timer circle animation */
+.timer-circle {
+    stroke-dasharray: 47.12;
+    stroke-dashoffset: 47.12;
+    animation: timer-stroke 10s linear forwards;
+    transform-origin: center;
+    transform: rotate(-90deg);
+}
+
+@keyframes timer-stroke {
+    to { stroke-dashoffset: 0; }
+}
+
+.hide-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    flex: 1;
+}
+
+.hide-option {
+    background: none;
+    border: none;
+    border-radius: 2px;
+    cursor: pointer;
+    text-align: left;
+    padding: 0.25rem 0.3rem;
+    transition: background 0.12s;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+.hide-option:hover { background: #f0f0f0; }
+
+.hide-option .ho-title {
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: #000;
+    display: block;
+    line-height: 1.3;
+}
+.hide-option .ho-desc {
+    font-size: 0.52rem;
+    color: #888;
+    display: block;
+    line-height: 1.3;
+}
+
+/* ── Negative chips ─────────────────────────────────────────────────────────── */
+.neg-separator {
+    display: flex;
+    align-items: center;
+    padding: 0 0.3rem;
+    color: #c00;
+    font-size: 0.7rem;
+    font-weight: 700;
+    opacity: 0.7;
+    flex-shrink: 0;
+    user-select: none;
+}
+
+.image-chip.negative {
+    border: 1.5px solid rgba(220,0,0,0.4);
+    position: relative;
+}
+
+.image-chip.negative::after {
+    content: '−';
+    position: absolute;
+    top: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #c00;
+    color: #fff;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    font-size: 10px;
+    line-height: 12px;
+    text-align: center;
+    font-weight: 700;
+}

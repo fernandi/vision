@@ -17,7 +17,13 @@ function getDiversity() {
 // Current combination mode: read from radio group
 function getCombinationMode() {
     const checked = document.querySelector('input[name="combination-mode"]:checked');
-    return checked ? checked.value : 'centroid';
+    return checked ? checked.value : 'purified';
+}
+
+// Negative mode
+function getNegativeMode() {
+    const checked = document.querySelector('input[name="negative-mode"]:checked');
+    return checked ? checked.value : 'directed';
 }
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -27,6 +33,15 @@ let isLoading     = false;
 let hasMore       = true;
 // Multimodal: array of { src, base64 } objects
 let referenceImages = [];
+// Negative images: array of { src, base64 } objects
+let referenceNegativeImages = [];
+// Snapshot for undo-clear
+let clearSnapshot = null;
+let undoClearTimer = null;
+// Set of imgPaths the user has hidden (ne plus voir)
+const hiddenImgPaths = new Set();
+// Boards: archived via NEW button (persisted in localStorage)
+let archivedBoards = JSON.parse(localStorage.getItem('archivedBoards') || '[]');
 
 // ── Saved images ────────────────────────────────────────────────────────────
 // Map: imgPath → { title, author, source, memberIds, clusterSize }
@@ -37,6 +52,7 @@ const savedThumbs = document.getElementById('saved-thumbs');
 const ICON_EXPAND = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>`;
 const ICON_PIN_EMPTY  = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76Z"/></svg>`;
 const ICON_PIN_FILLED = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5" fill="none"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76Z"/></svg>`;
+const ICON_EYE_SLASH  = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
 let currentLbPath = ''; // tracks the image currently shown in the lightbox
 
 // ── Image chips DOM ref ─────────────────────────────────────────────────────────
@@ -98,6 +114,10 @@ async function loadNextPage(firstPage = false) {
                 combination_mode: getCombinationMode(),
                 ...(referenceImages.length
                     ? { reference_images: referenceImages.map(r => r.base64), image_weight: 0.5 }
+                    : {}),
+                ...(referenceNegativeImages.length
+                    ? { negative_images: referenceNegativeImages.map(r => r.base64),
+                        negative_mode: getNegativeMode() }
                     : {}),
             }),
         });
@@ -192,8 +212,21 @@ function appendCards(results) {
                 hasGroup ? item.cluster_size       : null);
         });
 
+        // Hide → 'ne plus voir' overlay
+        const hideBtn = document.createElement('button');
+        hideBtn.className   = 'card-action-btn card-action-hide';
+        hideBtn.title       = 'Ne plus voir';
+        hideBtn.innerHTML   = ICON_EYE_SLASH;
+        hideBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            showHideOverlay(card, imgWrap, imgPath, title, item.Author, item.source,
+                hasGroup ? item.cluster_member_ids : null,
+                hasGroup ? item.cluster_size : null);
+        });
+
         actions.appendChild(expandBtn);
         actions.appendChild(saveBtn);
+        actions.appendChild(hideBtn);
         imgWrap.appendChild(actions);
 
         // ── Draggable ────────────────────────────────────────────────────────────
@@ -590,3 +623,382 @@ searchContainer.addEventListener('drop', async (e) => {
         console.error('Drop error:', err);
     }
 });
+
+// ── Utility: fetch image URL → base64 ────────────────────────────────────────
+async function imgUrlToBase64(url) {
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    return blobToBase64(blob);
+}
+
+// ── Update has-content class for clear button visibility ─────────────────────
+function updateHasContent() {
+    const hasText   = searchInput.value.trim().length > 0;
+    const hasImages = referenceImages.length > 0 || referenceNegativeImages.length > 0;
+    searchContainer.classList.toggle('has-content', hasText || hasImages);
+}
+searchInput.addEventListener('input', updateHasContent);
+
+// ── Clear all ─────────────────────────────────────────────────────────────────
+function clearAll() {
+    clearSnapshot = {
+        text:     searchInput.value,
+        images:   [...referenceImages],
+        negImages: [...referenceNegativeImages],
+    };
+    searchInput.value = '';
+    clearAllChips(false);
+    clearAllNegativeChips(false);
+    updateHasContent();
+
+    const undoBtn = document.getElementById('undo-clear-btn');
+    undoBtn.style.display = 'flex';
+    clearTimeout(undoClearTimer);
+    undoClearTimer = setTimeout(() => {
+        undoBtn.style.display = 'none';
+        clearSnapshot = null;
+    }, 5000);
+}
+
+function undoClear() {
+    if (!clearSnapshot) return;
+    searchInput.value = clearSnapshot.text;
+    // Reset state
+    referenceImages = [];
+    referenceNegativeImages = [];
+    chipsContainer.innerHTML = '';
+    // Rebuild from snapshot
+    clearSnapshot.images.forEach(r => addImageChip(r.src, r.base64));
+    clearSnapshot.negImages.forEach(r => addNegativeChipEl(r.src, r.base64));
+    document.getElementById('undo-clear-btn').style.display = 'none';
+    clearSnapshot = null;
+    updateHasContent();
+    if (currentQuery) search(currentQuery);
+}
+
+document.getElementById('clear-all-btn').addEventListener('click', clearAll);
+document.getElementById('undo-clear-btn').addEventListener('click', undoClear);
+
+// ── Board system ──────────────────────────────────────────────────────────────
+function _boardLabel() {
+    const now   = new Date();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const isToday = now.getTime() >= today.getTime();
+    if (isToday) {
+        return now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    }
+    return now.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+           + ' ' + now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function newBoard() {
+    if (savedItems.size === 0) return;
+    const archived = {
+        id:        Date.now(),
+        name:      _boardLabel(),
+        createdAt: new Date().toISOString(),
+        images:    Array.from(savedItems.entries()).map(([src, d]) => ({ src, ...d })),
+    };
+    archivedBoards.unshift(archived);
+    localStorage.setItem('archivedBoards', JSON.stringify(archivedBoards));
+
+    // Clear current board
+    savedItems.clear();
+    savedThumbs.innerHTML = '';
+    document.body.classList.remove('has-saved');
+
+    if (document.body.classList.contains('pinbar-expanded')) {
+        renderExpandedBoards();
+    }
+}
+
+// ── Pinbar: expand / collapse / use for search ────────────────────────────────
+function pinbarExpand() {
+    document.body.classList.add('pinbar-expanded');
+    renderExpandedBoards();
+}
+
+function pinbarCollapse() {
+    document.body.classList.remove('pinbar-expanded');
+}
+
+function renderExpandedBoards() {
+    const list = document.getElementById('pinbar-boards-list');
+    list.innerHTML = '';
+
+    // Current board row
+    if (savedItems.size > 0) {
+        const row = document.createElement('div');
+        row.className = 'pinbar-board-row';
+        const label = document.createElement('div');
+        label.className = 'pinbar-board-label';
+        label.textContent = 'BOARD ACTUEL';
+        const thumbs = document.createElement('div');
+        thumbs.className = 'pinbar-board-thumbs';
+        savedItems.forEach(({ title }, src) => {
+            const img = document.createElement('img');
+            img.src = src; img.alt = title;
+            img.className = 'pinbar-board-thumb';
+            img.addEventListener('click', () => {
+                const d = savedItems.get(src);
+                if (d) openLightbox(src, d.title, d.author, d.source, d.memberIds, d.clusterSize);
+            });
+            thumbs.appendChild(img);
+        });
+        row.appendChild(label);
+        row.appendChild(thumbs);
+        list.appendChild(row);
+    }
+
+    // Archived boards
+    archivedBoards.forEach(board => {
+        const row = document.createElement('div');
+        row.className = 'pinbar-board-row';
+        const label = document.createElement('div');
+        label.className = 'pinbar-board-label';
+        label.textContent = board.name;
+        const thumbs = document.createElement('div');
+        thumbs.className = 'pinbar-board-thumbs';
+        (board.images || []).forEach(img => {
+            const el = document.createElement('img');
+            el.src = img.src; el.alt = img.title || '';
+            el.className = 'pinbar-board-thumb';
+            el.addEventListener('click', () => {
+                openLightbox(img.src, img.title, img.author, img.source, img.memberIds, img.clusterSize);
+            });
+            thumbs.appendChild(el);
+        });
+        row.appendChild(label);
+        row.appendChild(thumbs);
+        list.appendChild(row);
+    });
+}
+
+async function pinbarUseForSearch() {
+    // Convert all saved thumbnails to chips in the search bar
+    for (const [src] of savedItems) {
+        if (referenceImages.some(r => r.src === src)) continue;
+        try {
+            const b64 = await imgUrlToBase64(src);
+            addImageChip(src, b64);
+        } catch (e) { console.error('pinbarUseForSearch:', e); }
+    }
+    updateHasContent();
+    if (searchInput.value.trim() || referenceImages.length) {
+        search(searchInput.value.trim());
+    }
+}
+
+// Pinbar button listeners
+document.getElementById('pinbar-use-search-btn').addEventListener('click', pinbarUseForSearch);
+document.getElementById('pinbar-new-btn').addEventListener('click', newBoard);
+document.getElementById('pinbar-expand-btn').addEventListener('click', pinbarExpand);
+document.getElementById('pinbar-collapse-btn').addEventListener('click', pinbarCollapse);
+
+// ── "Ne plus voir" overlay ────────────────────────────────────────────────────
+let _hideTimerHandle = null;
+
+function showHideOverlay(card, imgWrap, imgPath, title, author, source, memberIds, clusterSize) {
+    hiddenImgPaths.add(imgPath);
+
+    const overlay = document.createElement('div');
+    overlay.className = 'hide-overlay';
+    overlay.innerHTML = `
+        <div class="hide-overlay-top">
+            <button class="hide-undo-btn" title="Annuler">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/>
+                </svg>
+            </button>
+            <div class="hide-timer-area">
+                <svg width="18" height="18" viewBox="0 0 18 18">
+                    <circle cx="9" cy="9" r="7.5" fill="none" stroke="#000" stroke-width="1.5" opacity="0.12"/>
+                    <circle cx="9" cy="9" r="7.5" fill="none" stroke="#000" stroke-width="1.5"
+                            class="timer-circle"/>
+                </svg>
+                <button class="hide-skip-btn">SKIP</button>
+            </div>
+        </div>
+        <div class="hide-options">
+            <button class="hide-option" data-action="negative">
+                <span class="ho-title">Use as negative</span>
+                <span class="ho-desc">Exclude its specific traits from search</span>
+            </button>
+            <button class="hide-option" data-action="taste">
+                <span class="ho-title">Not my taste</span>
+                <span class="ho-desc">Hide from my results forever</span>
+            </button>
+            <button class="hide-option" data-action="flag">
+                <span class="ho-title">WTF Flag</span>
+                <span class="ho-desc">For us – doesn't affect your search</span>
+            </button>
+        </div>
+    `;
+
+    imgWrap.appendChild(overlay);
+
+    // Auto-dismiss after 10s
+    _hideTimerHandle = setTimeout(() => dismissHideOverlay(card, overlay, imgPath), 10000);
+
+    // Undo: remove overlay, restore
+    overlay.querySelector('.hide-undo-btn').addEventListener('click', () => {
+        clearTimeout(_hideTimerHandle);
+        hiddenImgPaths.delete(imgPath);
+        overlay.remove();
+    });
+
+    // SKIP: dismiss without action
+    overlay.querySelector('.hide-skip-btn').addEventListener('click', () => {
+        clearTimeout(_hideTimerHandle);
+        dismissHideOverlay(card, overlay, imgPath);
+    });
+
+    // Options
+    overlay.querySelectorAll('.hide-option').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            clearTimeout(_hideTimerHandle);
+            const action = btn.dataset.action;
+            if (action === 'negative') {
+                try {
+                    const b64 = await imgUrlToBase64(imgPath);
+                    addNegativeChipEl(imgPath, b64);
+                    updateHasContent();
+                    if (currentQuery) search(currentQuery);
+                } catch(e) { console.error('negative:', e); }
+            } else if (action === 'taste') {
+                // Persist in localStorage
+                const denylist = JSON.parse(localStorage.getItem('denylist') || '[]');
+                if (!denylist.includes(imgPath)) {
+                    denylist.push(imgPath);
+                    localStorage.setItem('denylist', JSON.stringify(denylist));
+                }
+            } else if (action === 'flag') {
+                // Send flag to backend (fire & forget)
+                fetch('/flag', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ img_path: imgPath }),
+                }).catch(() => {});
+            }
+            dismissHideOverlay(card, overlay, imgPath);
+        });
+    });
+}
+
+function dismissHideOverlay(card, overlay, imgPath) {
+    overlay.remove();
+    // Fade card out and load replacement
+    card.style.transition = 'opacity 0.3s';
+    card.style.opacity = '0';
+    setTimeout(() => {
+        card.remove();
+        if (hasMore && !isLoading) loadNextPage();
+    }, 300);
+}
+
+// ── Negative chips ────────────────────────────────────────────────────────────
+function _ensureNegSeparator() {
+    if (chipsContainer.querySelector('.neg-separator')) return;
+    const sep = document.createElement('span');
+    sep.className = 'neg-separator';
+    sep.textContent = '−';
+    chipsContainer.appendChild(sep);
+}
+
+function _removeNegSeparatorIfEmpty() {
+    if (referenceNegativeImages.length === 0) {
+        const sep = chipsContainer.querySelector('.neg-separator');
+        if (sep) sep.remove();
+        // Hide negative mode section
+        document.getElementById('negative-mode-section').hidden = true;
+    }
+}
+
+function addNegativeChipEl(src, base64, skipPush = false) {
+    if (!skipPush) {
+        referenceNegativeImages.push({ src, base64 });
+    }
+    _ensureNegSeparator();
+    // Show negative mode section in filter panel
+    document.getElementById('negative-mode-section').hidden = false;
+
+    const idx  = referenceNegativeImages.length - 1;
+    const chip = document.createElement('div');
+    chip.className   = 'image-chip negative';
+    chip.dataset.idx = idx;
+    chip.dataset.neg = '1';
+
+    const thumb = document.createElement('img');
+    thumb.src = src; thumb.alt = 'Negative reference';
+    chip.appendChild(thumb);
+
+    const btn = document.createElement('button');
+    btn.className   = 'image-chip-remove';
+    btn.ariaLabel   = 'Remove negative image';
+    btn.textContent = '×';
+    btn.addEventListener('click', e => {
+        e.stopPropagation();
+        removeNegativeChip(chip, Number(chip.dataset.idx));
+    });
+    chip.appendChild(btn);
+    chipsContainer.appendChild(chip);
+}
+
+function removeNegativeChip(chipEl, idx) {
+    chipEl.remove();
+    referenceNegativeImages.splice(idx, 1);
+    chipsContainer.querySelectorAll('.image-chip.negative').forEach((c, i) => { c.dataset.idx = i; });
+    _removeNegSeparatorIfEmpty();
+    updateHasContent();
+    if (currentQuery) search(currentQuery);
+}
+
+function clearAllNegativeChips(rerun = false) {
+    chipsContainer.querySelectorAll('.image-chip.negative').forEach(c => c.remove());
+    referenceNegativeImages = [];
+    _removeNegSeparatorIfEmpty();
+    if (rerun && currentQuery) search(currentQuery);
+}
+
+// Negative mode change → retrigger search
+document.querySelectorAll('input[name="negative-mode"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+        if (currentQuery && referenceNegativeImages.length) search(currentQuery);
+    });
+});
+
+// ── Magic link auth (pinbar expanded view) ────────────────────────────────────
+const pinbarMagicBtn   = document.getElementById('pinbar-magic-btn');
+const pinbarEmailInput = document.getElementById('pinbar-email-input');
+const pinbarAuthStatus = document.getElementById('pinbar-auth-status');
+
+pinbarMagicBtn.addEventListener('click', async () => {
+    const email = pinbarEmailInput.value.trim();
+    if (!email) return;
+    pinbarMagicBtn.disabled   = true;
+    pinbarMagicBtn.textContent = '...';
+    try {
+        const resp = await fetch('/auth/request', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ email }),
+        });
+        const data = await resp.json();
+        pinbarAuthStatus.hidden = false;
+        if (data.status === 'sent') {
+            pinbarAuthStatus.textContent = `✓ Link sent to ${email} – check your inbox (or the server console in dev mode)`;
+        } else {
+            pinbarAuthStatus.textContent = 'Error – please try again';
+        }
+    } catch (e) {
+        pinbarAuthStatus.hidden = false;
+        pinbarAuthStatus.textContent = 'Network error';
+    } finally {
+        pinbarMagicBtn.disabled   = false;
+        pinbarMagicBtn.textContent = 'SEND LINK';
+    }
+});
+
+// ── Update task.md: mark done ─────────────────────────────────────────────────
+// (no-op in production — this comment is just a marker for the dev)

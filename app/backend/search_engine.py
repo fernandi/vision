@@ -560,7 +560,8 @@ class VisualSearchEngine:
 
     def search(self, query_text, pool_size=200, page_size=20, offset=0, diversity=0.5,
                 image_embedding=None, image_weight=0.5,
-                combination_mode="centroid", individual_image_embeddings=None):
+                combination_mode="purified", individual_image_embeddings=None,
+                negative_embeddings=None, negative_mode="directed"):
         """
         Paginated search with MMR diversity.
 
@@ -594,7 +595,11 @@ class VisualSearchEngine:
         img_hash = None
         if image_embedding is not None:
             img_hash = hash(image_embedding.tobytes())
-        cache_key = (query_text.strip().lower(), round(diversity, 2), img_hash, combination_mode)
+        neg_hash = None
+        if negative_embeddings:
+            neg_hash = hash(tuple(e.tobytes() for e in negative_embeddings))
+        cache_key = (query_text.strip().lower(), round(diversity, 2), img_hash,
+                     combination_mode, neg_hash, negative_mode)
         pool = self._pool_cache_get(cache_key)
 
         if pool is None:
@@ -726,6 +731,24 @@ class VisualSearchEngine:
                 norm = np.linalg.norm(mean_vec, axis=1, keepdims=True)
                 text_embedding = (mean_vec / np.where(norm == 0, 1e-9, norm)).astype('float32')
 
+            # ── Apply negative embeddings: directed or orthogonal (pre-FAISS) ───
+            if negative_embeddings and text_embedding is not None and all_query_vecs:
+                pos_mean = np.concatenate(all_query_vecs, axis=0).mean(axis=0).astype('float32')  # (D,)
+                if negative_mode == "directed":
+                    alpha = 0.35
+                    for neg_emb in negative_embeddings:
+                        neg_dev = neg_emb[0] - pos_mean
+                        text_embedding[0] -= alpha * neg_dev
+                    norm = np.linalg.norm(text_embedding[0])
+                    text_embedding[0] /= (norm + 1e-9)
+                elif negative_mode == "orthogonal":
+                    for neg_emb in negative_embeddings:
+                        neg_dir = (neg_emb[0] - pos_mean).astype('float32')
+                        neg_dir /= (np.linalg.norm(neg_dir) + 1e-9)
+                        text_embedding[0] -= (text_embedding[0] @ neg_dir) * neg_dir
+                    norm = np.linalg.norm(text_embedding[0])
+                    text_embedding[0] /= (norm + 1e-9)
+
             # ── 4. FAISS search (skipped for intersection/union — already done) ──
             if valid_ids is None:
                 fetch_k = min(pool_size * 3, self.index.ntotal)
@@ -739,6 +762,22 @@ class VisualSearchEngine:
                     for i, idx in enumerate(indices[0])
                     if idx >= 0 and int(idx) not in self.denylist
                 }
+
+            # ── Penalty mode: penalise candidates similar to negatives (post-FAISS) ──
+            if negative_embeddings and negative_mode == "penalty" and valid_ids:
+                beta = 0.4
+                pen_ids = list(score_by_id.keys())
+                if pen_ids:
+                    pen_vecs = np.vstack(
+                        [self.index.reconstruct(int(fid)) for fid in pen_ids]
+                    ).astype('float32')
+                    norms_p = np.linalg.norm(pen_vecs, axis=1, keepdims=True)
+                    pen_vecs /= np.where(norms_p == 0, 1e-9, norms_p)
+                    for neg_emb in negative_embeddings:
+                        neg_sims = (pen_vecs @ neg_emb.T).flatten()
+                        for i, fid in enumerate(pen_ids):
+                            score_by_id[fid] = score_by_id.get(fid, 0.0) - beta * float(neg_sims[i])
+                    valid_ids = sorted(valid_ids, key=lambda x: -score_by_id.get(x, 0.0))
 
             # ── 5. Rank / re-rank to pool_size ───────────────────────────────────
             cluster_sizes   = {}   # faiss_id → Voronoi count
