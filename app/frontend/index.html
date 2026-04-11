@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Visual Search</title>
-    <link rel="stylesheet" href="style.css?v=7">
+    <link rel="stylesheet" href="style.css?v=8">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -39,6 +39,11 @@
 
     <!-- Lightbox -->
     <div id="lightbox" class="lightbox" role="dialog" aria-modal="true">
+        <!-- Similar images strip (hidden when no cluster) -->
+        <div id="lb-similaires" class="lb-similaires" aria-hidden="true">
+            <span id="lb-sim-label" class="lb-sim-label"></span>
+            <div id="lb-sim-strip" class="lb-sim-strip"></div>
+        </div>
         <div class="lightbox-img-wrap">
             <img id="lightbox-img" src="" alt="">
         </div>
@@ -68,7 +73,7 @@
         </div>
         <div id="cluster-grid" class="cluster-grid"></div>
     </div>
-    <script src="app.js?v=7"></script>
+    <script src="app.js?v=8"></script>
 </body>
 
 </html>

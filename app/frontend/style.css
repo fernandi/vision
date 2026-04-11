@@ -205,29 +205,24 @@ body.has-results .gallery {
     font-style: italic;
 }
 
-/* ── Cluster badge (diversity mode) ───────────────────────────────────────── */
-/* Shows how many similar images this card represents in the MMR pool */
-.cluster-badge {
-    display: inline-block;
-    margin-top: 0.45rem;
-    padding: 0.15rem 0.45rem;
-    font-family: 'Inter', sans-serif;
-    font-size: 0.65rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: #000;
-    background: rgba(0, 0, 0, 0.07);
-    border-radius: 999px;
-    user-select: none;
-    align-self: flex-start;   /* left-aligned under the image */
-    transition: background 0.2s, opacity 0.2s;
-    opacity: 0.6;
+/* ── Cluster count: shown inline at hover, inside .image-info ─────────────── */
+/* Instead of a permanent badge, the count appears as part of the hover info    */
+.title-with-similar {
+    display: flex;
+    align-items: baseline;
+    gap: 0;
+    flex-wrap: wrap;
 }
 
-.image-card:hover .cluster-badge {
-    background: rgba(0, 0, 0, 0.13);
-    opacity: 1;
+.similar-count {
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent-color);
+    white-space: nowrap;
+    margin-left: 0.4em;
+    opacity: 0.85;
 }
 
 .placeholder-text {
@@ -284,6 +279,7 @@ body.has-results .gallery {
     max-height: 100%;
     object-fit: contain;
     display: block;
+    transition: opacity 0.15s ease;
 }
 
 /* Bottom bar: title left, download right */
@@ -390,6 +386,73 @@ body.has-results .gallery {
     to   { opacity: 1; }
 }
 
+/* ── Lightbox: similar-images strip ─────────────────────────────────────── */
+.lb-similaires {
+    flex-shrink: 0;
+    display: none;          /* hidden by default, shown via JS */
+    align-items: center;
+    gap: 1.2rem;
+    padding: 0.7rem 2rem 0.7rem 2.5rem;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    background: var(--bg-color);
+    overflow: hidden;
+}
+
+.lb-similaires.has-items {
+    display: flex;
+}
+
+.lb-sim-label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: black;
+    white-space: nowrap;
+    opacity: 0.55;
+    flex-shrink: 0;
+}
+
+.lb-sim-strip {
+    display: flex;
+    gap: 0.4rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    flex: 1;
+}
+
+.lb-sim-strip::-webkit-scrollbar { display: none; }
+
+.lb-sim-thumb {
+    flex-shrink: 0;
+    width: 2.8rem;
+    height: 2.8rem;
+    border-radius: 2px;
+    overflow: hidden;
+    cursor: pointer;
+    opacity: 0.65;
+    transition: opacity 0.15s;
+    background: rgba(0,0,0,0.05);
+}
+
+.lb-sim-thumb:hover {
+    opacity: 1;
+}
+
+.lb-sim-thumb.active {
+    opacity: 1;
+    outline: 2px solid black;
+    outline-offset: 1px;
+}
+
+.lb-sim-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
 /* ── Cluster group lightbox ───────────────────────────────────────────────── */
 .cluster-lightbox {
     display: none;
@@ -485,6 +548,7 @@ body.has-results .gallery {
     line-height: 1.25;
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }

@@ -111,41 +111,48 @@ function appendCards(results) {
         const title    = item.Title || 'Untitled';
         const hasGroup = item.cluster_size != null && item.cluster_size > 1
                          && Array.isArray(item.cluster_member_ids);
+        const simCount = hasGroup ? item.cluster_size - 1 : 0; // exclude representative itself
 
-        // Cluster badge
-        const clusterBadge = (item.cluster_size != null)
-            ? `<span class="cluster-badge" title="${item.cluster_size} images similaires">×${item.cluster_size}</span>`
-            : '';
+        // Title: shows similar count inline on hover only (no permanent badge)
+        const titleHTML = hasGroup
+            ? `<div class="title title-with-similar">
+                 <span>${title}</span>
+                 <span class="similar-count">&nbsp;·&nbsp;${simCount}&nbsp;SIMILAIRE${simCount > 1 ? 'S' : ''}</span>
+               </div>`
+            : `<div class="title">${title}</div>`;
 
         card.innerHTML = `
             <img src="${imgPath}" alt="${title}" loading="lazy">
             <div class="image-info">
-                <div class="title">${title}</div>
+                ${titleHTML}
                 <div class="author">${item.Author || 'Unknown'}</div>
             </div>
-            ${clusterBadge}
         `;
 
+        // All cards open the regular lightbox; cluster cards also load the strip
         card.addEventListener('click', () => {
-            if (hasGroup) {
-                openClusterView(item.cluster_member_ids, title, item.cluster_size);
-            } else {
-                openLightbox(imgPath, title, item.Author, item.source);
-            }
+            openLightbox(
+                imgPath, title, item.Author, item.source,
+                hasGroup ? item.cluster_member_ids : null,
+                hasGroup ? item.cluster_size       : null
+            );
         });
 
         gallery.appendChild(card);
     });
 }
 
-// ── Lightbox (single image) ──────────────────────────────────────────────────────
-const lightbox   = document.getElementById('lightbox');
-const lbImg      = document.getElementById('lightbox-img');
-const lbTitle    = document.getElementById('lightbox-title');
-const lbAuthor   = document.getElementById('lightbox-author');
-const lbMuseum   = document.getElementById('lightbox-museum');
-const lbDownload = document.getElementById('lightbox-download');
-const lbClose    = document.querySelector('#lightbox .lightbox-close');
+// ── Lightbox (single image + optional similar strip) ──────────────────────────
+const lightbox    = document.getElementById('lightbox');
+const lbImg       = document.getElementById('lightbox-img');
+const lbTitle     = document.getElementById('lightbox-title');
+const lbAuthor    = document.getElementById('lightbox-author');
+const lbMuseum    = document.getElementById('lightbox-museum');
+const lbDownload  = document.getElementById('lightbox-download');
+const lbClose     = document.querySelector('#lightbox .lightbox-close');
+const lbSimilaires = document.getElementById('lb-similaires');
+const lbSimLabel  = document.getElementById('lb-sim-label');
+const lbSimStrip  = document.getElementById('lb-sim-strip');
 
 const MUSEUM_NAMES = {
     artic:     'ART INSTITUTE OF CHICAGO',
@@ -157,27 +164,101 @@ const MUSEUM_NAMES = {
     chicago:   'ART INSTITUTE OF CHICAGO',
 };
 
-function openLightbox(src, title, author, source) {
+/**
+ * Open the lightbox.
+ * @param {string}   src            - image URL
+ * @param {string}   title
+ * @param {string}   author
+ * @param {string}   source         - museum key
+ * @param {number[]|null} memberIds - FAISS ids of cluster members (null if no cluster)
+ * @param {number|null}   clusterSize
+ */
+async function openLightbox(src, title, author, source, memberIds = null, clusterSize = null) {
     lbImg.src = src;
-    lbTitle.textContent   = (title || 'Untitled').toUpperCase();
+    lbTitle.textContent   = (title  || 'Untitled').toUpperCase();
     lbAuthor.textContent  = (author && author !== 'N/A') ? author.toUpperCase() : '';
     lbMuseum.textContent  = MUSEUM_NAMES[source] || (source || '').toUpperCase();
     lbDownload.href       = src;
     lbDownload.download   = src.split('/').pop();
+
+    // Reset similar strip
+    lbSimilaires.classList.remove('has-items');
+    lbSimStrip.innerHTML  = '';
+    lbSimLabel.textContent = '';
+
     lightbox.classList.add('open');
     document.body.style.overflow = 'hidden';
+
+    // Load similar images if cluster
+    if (memberIds && memberIds.length > 1) {
+        const simCount = clusterSize - 1;
+        lbSimLabel.textContent = `${simCount} IMAGE${simCount > 1 ? 'S' : ''} SIMILAIRE${simCount > 1 ? 'S' : ''}`;
+        lbSimilaires.classList.add('has-items');
+
+        // Render placeholder thumbs while loading
+        memberIds.forEach((_, i) => {
+            const ph = document.createElement('div');
+            ph.className = 'lb-sim-thumb';
+            lbSimStrip.appendChild(ph);
+        });
+
+        try {
+            const resp = await fetch(`${API_URL}/cluster-members`, {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({ faiss_ids: memberIds }),
+            });
+            if (!resp.ok) throw new Error('Failed to load similaires');
+            const data = await resp.json();
+
+            lbSimStrip.innerHTML = '';
+            data.results.forEach(member => {
+                const memberPath = member.image_url || `/images/${member.filename}`;
+                const isActive   = memberPath === src;
+
+                const thumb = document.createElement('div');
+                thumb.className = 'lb-sim-thumb' + (isActive ? ' active' : '');
+                thumb.title     = member.Title || '';
+                thumb.innerHTML = `<img src="${memberPath}" alt="${member.Title || ''}" loading="lazy">`;
+
+                thumb.addEventListener('click', () => {
+                    if (isActive) return;
+                    // Swap main image smoothly
+                    lbImg.style.opacity = '0';
+                    lbImg.src = memberPath;
+                    lbImg.onload = () => { lbImg.style.opacity = '1'; };
+                    lbTitle.textContent   = (member.Title  || 'Untitled').toUpperCase();
+                    lbAuthor.textContent  = (member.Author && member.Author !== 'N/A')
+                                            ? member.Author.toUpperCase() : '';
+                    lbMuseum.textContent  = MUSEUM_NAMES[member.source] || (member.source || '').toUpperCase();
+                    lbDownload.href       = memberPath;
+                    lbDownload.download   = memberPath.split('/').pop();
+                    // Update active state
+                    lbSimStrip.querySelectorAll('.lb-sim-thumb').forEach(t => t.classList.remove('active'));
+                    thumb.classList.add('active');
+                });
+
+                lbSimStrip.appendChild(thumb);
+            });
+        } catch (err) {
+            console.error('Similar strip error:', err);
+        }
+    }
 }
 
 function closeLightbox() {
     lightbox.classList.remove('open');
     document.body.style.overflow = '';
     lbImg.src = '';
+    lbImg.style.opacity = '';
+    lbSimilaires.classList.remove('has-items');
+    lbSimStrip.innerHTML = '';
 }
 
 lbClose.addEventListener('click', closeLightbox);
 lightbox.addEventListener('click', e => { if (e.target === lightbox) closeLightbox(); });
 
-// ── Cluster group lightbox ──────────────────────────────────────────────────────
+// ── Cluster group lightbox (kept for backward compat, no longer primary entry) ─
 const clusterLightbox = document.getElementById('cluster-lightbox');
 const clusterGrid     = document.getElementById('cluster-grid');
 const clusterLabel    = document.getElementById('cluster-label');
@@ -190,52 +271,10 @@ function closeClusterLightbox() {
     clusterGrid.innerHTML = '';
 }
 
-async function openClusterView(memberIds, representativeTitle, clusterSize) {
-    // Open overlay immediately with a loading spinner
-    clusterLabel.textContent = `${clusterSize} image${clusterSize > 1 ? 's' : ''} similaires`;
-    clusterGrid.innerHTML = '<div class="cluster-loading"><span></span><span></span><span></span></div>';
-    clusterLightbox.classList.add('open');
-    document.body.style.overflow = 'hidden';
-
-    try {
-        const resp = await fetch(`${API_URL}/cluster-members`, {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ faiss_ids: memberIds }),
-        });
-        if (!resp.ok) throw new Error('Failed to load cluster');
-        const data = await resp.json();
-        renderClusterGrid(data.results);
-    } catch (err) {
-        clusterGrid.innerHTML = `<p style="color:#666;padding:2rem">Erreur: ${err.message}</p>`;
-    }
-}
-
-function renderClusterGrid(items) {
-    clusterGrid.innerHTML = '';
-    items.forEach(item => {
-        const imgPath = item.image_url || `/images/${item.filename}`;
-        const title   = item.Title || 'Untitled';
-
-        const thumb = document.createElement('div');
-        thumb.className = 'cluster-thumb';
-        thumb.innerHTML = `
-            <img src="${imgPath}" alt="${title}" loading="lazy">
-            <div class="cluster-thumb-info">${title}</div>
-        `;
-        thumb.addEventListener('click', () => {
-            // Close cluster view, open regular lightbox
-            closeClusterLightbox();
-            openLightbox(imgPath, title, item.Author, item.source);
-        });
-        clusterGrid.appendChild(thumb);
-    });
-}
-
 clusterBack.addEventListener('click',  closeClusterLightbox);
 clusterClose.addEventListener('click', closeClusterLightbox);
 
-// Escape: close cluster first, then regular lightbox if open
+// Escape: close lightboxes
 document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
     if (clusterLightbox.classList.contains('open')) { closeClusterLightbox(); return; }
@@ -258,6 +297,5 @@ suggestionBtns.forEach(btn => {
 diversityToggle.addEventListener('click', () => {
     const isOn = diversityToggle.getAttribute('aria-pressed') === 'true';
     diversityToggle.setAttribute('aria-pressed', isOn ? 'false' : 'true');
-    // Re-run the current query with the new diversity value
     if (currentQuery) search(currentQuery);
 });
