@@ -250,71 +250,157 @@ class VisualSearchEngine:
 
         selected_ids = [candidate_ids[i] for i in selected]
 
-        # ── Voronoi cluster sizes + member lists ──────────────────────────────────
-        # Assign each of the N candidates to its nearest selected item.
-        # inter_sim[selected_arr, :] has shape (S, N); argmax over axis=0
-        # gives, for every candidate, which centroid it is closest to.
-        selected_arr = np.array(selected)                      # (S,)
-        nearest_selected_pos = inter_sim[selected_arr, :].argmax(axis=0)  # (N,)
+        # ── Pass 1 : Union-Find deduplication on MMR-selected pool ──────────────
+        # inter_sim[i,j] is already computed above. Use it to merge near-duplicates
+        # that slipped through MMR (can happen at lower λ values).
+        # dup_threshold=0.935: catches same artwork in different reproductions.
+        dup_threshold = 0.935
+        n_sel = len(selected)
+        # Sub-matrix: similarity among MMR-selected items (S × S)
+        sim_sel = inter_sim[np.ix_(selected, selected)]  # (S, S)
 
-        cluster_sizes   = {}                         # faiss_id → count
-        cluster_members = {sid: [] for sid in selected_ids}  # faiss_id → [faiss_ids]
+        parent = list(range(n_sel))
 
-        for candidate_local_idx, centroid_local_pos in enumerate(nearest_selected_pos):
-            sid  = selected_ids[int(centroid_local_pos)]
-            cfid = candidate_ids[candidate_local_idx]
-            cluster_sizes[sid]   = cluster_sizes.get(sid, 0) + 1
-            cluster_members[sid].append(cfid)
+        def _find(x):
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
 
-        return selected_ids, cluster_sizes, cluster_members
+        def _union(i, j):
+            pi, pj = _find(i), _find(j)
+            if pi == pj:
+                return
+            si = candidate_scores.get(selected_ids[pi], 0.0)
+            sj = candidate_scores.get(selected_ids[pj], 0.0)
+            if si >= sj:
+                parent[pj] = pi
+            else:
+                parent[pi] = pj
 
-    def _voronoi_clusters(self, selected_ids, all_candidate_ids):
-        """
-        Compute Voronoi cluster sizes and member lists without MMR.
+        above = np.argwhere((sim_sel > dup_threshold) & ~np.eye(n_sel, dtype=bool))
+        for _i, _j in above:
+            if _i < _j:
+                _union(int(_i), int(_j))
 
-        Assigns each candidate in `all_candidate_ids` to the nearest image
-        in `selected_ids` using cosine similarity in the CLIP embedding space.
-        Used to add Voronoi clustering to the pure-relevance (no-diversity) mode.
+        seen_reps, deduped_local, deduped_ids = set(), [], []
+        for i in range(n_sel):
+            rep = _find(i)
+            if rep not in seen_reps:
+                seen_reps.add(rep)
+                deduped_local.append(selected[rep])  # index into candidate_ids
+                deduped_ids.append(selected_ids[rep])
 
-        Args:
-            selected_ids:       list of faiss_ids that are the 'centroid' images
-                                (the top-N shown in results).
-            all_candidate_ids:  full over-fetched candidate pool (superset of
-                                selected_ids, typically 3×).
-        Returns:
-            (cluster_sizes, cluster_members) dicts keyed by selected faiss_id.
-        """
-        if not all_candidate_ids or not selected_ids:
-            return {}, {}
-
-        # Reconstruct embeddings batch
-        all_vecs = np.vstack([
-            self.index.reconstruct(int(fid)) for fid in all_candidate_ids
-        ]).astype('float32')   # (M, D)
-        norms = np.linalg.norm(all_vecs, axis=1, keepdims=True)
-        norms = np.where(norms == 0, 1e-9, norms)
-        all_vecs /= norms      # unit vectors
-
-        # Indices of selected_ids within all_candidate_ids
-        id_to_local = {fid: i for i, fid in enumerate(all_candidate_ids)}
-        sel_indices  = np.array([id_to_local[fid] for fid in selected_ids])  # (S,)
-
-        selected_vecs = all_vecs[sel_indices, :]  # (S, D)
-
-        # Cross-sim: for each candidate, which centroid is closest?
-        # (S, D) @ (D, M) → (S, M)
-        cross_sim    = selected_vecs @ all_vecs.T   # (S, M)
-        nearest_pos  = cross_sim.argmax(axis=0)     # (M,) index into selected_ids
+        # ── Pass 2 : Voronoi partition of ALL N candidates onto surviving reps ──
+        ded_arr      = np.array(deduped_local)         # (D,)
+        ded_sim      = inter_sim[ded_arr, :]           # (D, N)
+        nearest_pos  = ded_sim.argmax(axis=0)          # (N,) index into deduped_ids
 
         cluster_sizes   = {}
-        cluster_members = {sid: [] for sid in selected_ids}
-        for candidate_local_idx, centroid_local_pos in enumerate(nearest_pos):
-            sid  = selected_ids[int(centroid_local_pos)]
-            cfid = all_candidate_ids[candidate_local_idx]
+        cluster_members = {sid: [] for sid in deduped_ids}
+        for cand_idx, rep_pos in enumerate(nearest_pos.tolist()):
+            sid  = deduped_ids[rep_pos]
+            cfid = candidate_ids[cand_idx]
             cluster_sizes[sid]   = cluster_sizes.get(sid, 0) + 1
             cluster_members[sid].append(cfid)
 
-        return cluster_sizes, cluster_members
+        return deduped_ids, cluster_sizes, cluster_members
+
+    def _deduplicate_and_voronoi(self, selected_ids, all_candidate_ids, score_by_id,
+                                  dup_threshold=0.935):
+        """
+        Two-pass clustering that fixes near-duplicates appearing in the displayed pool.
+
+        Pass 1 — Union-Find deduplication within the selected pool:
+            Merges pairs of selected images whose cosine similarity exceeds
+            `dup_threshold` (captures same artwork in different reproductions,
+            near-identical prints, etc.). The highest-scoring member of each
+            group becomes the representative; others become cluster members.
+
+        Pass 2 — Voronoi partition:
+            Assigns every candidate in `all_candidate_ids` (the full over-fetched
+            pool) to the nearest surviving representative.  This combines the
+            over-fetch non-selected candidates AND the merged duplicates into
+            cohesive clusters.
+
+        Args:
+            selected_ids:       top-N FAISS ids (may contain visual duplicates).
+            all_candidate_ids:  full 3× over-fetch pool (superset of selected_ids).
+            score_by_id:        {faiss_id: cosine_score} dict.
+            dup_threshold:      cosine similarity above which two selected images
+                                are considered near-duplicates and merged.
+        Returns:
+            (deduped_ids, cluster_sizes, cluster_members)
+        """
+        n_sel = len(selected_ids)
+        if n_sel == 0:
+            return [], {}, {}
+
+        # ── Batch-reconstruct & normalise all embeddings (one shot) ──────────────
+        all_vecs = np.vstack([
+            self.index.reconstruct(int(fid)) for fid in all_candidate_ids
+        ]).astype('float32')                        # (M, D)
+        norms = np.linalg.norm(all_vecs, axis=1, keepdims=True)
+        all_vecs /= np.where(norms == 0, 1e-9, norms)
+
+        id_to_local = {fid: i for i, fid in enumerate(all_candidate_ids)}
+        sel_indices = np.array([id_to_local[fid] for fid in selected_ids])  # (S,)
+        sel_vecs    = all_vecs[sel_indices]         # (S, D)
+
+        # ── Pass 1: Union-Find deduplication within selected pool ──────────────
+        sim_sel = sel_vecs @ sel_vecs.T             # (S, S) pairwise similarity
+
+        parent = list(range(n_sel))
+
+        def find(x):
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]       # path halving
+                x = parent[x]
+            return x
+
+        def union(i, j):
+            pi, pj = find(i), find(j)
+            if pi == pj:
+                return
+            # Higher-score item becomes the root (representative)
+            si = score_by_id.get(selected_ids[pi], 0.0)
+            sj = score_by_id.get(selected_ids[pj], 0.0)
+            if si >= sj:
+                parent[pj] = pi
+            else:
+                parent[pi] = pj
+
+        # Iterate over all pairs above threshold
+        above = np.argwhere(
+            (sim_sel > dup_threshold) & ~np.eye(n_sel, dtype=bool)
+        )
+        for i, j in above:
+            if i < j:
+                union(int(i), int(j))
+
+        # Surviving representatives in original FAISS score order
+        seen, deduped_ids = set(), []
+        for i in range(n_sel):
+            rep = find(i)
+            if rep not in seen:
+                seen.add(rep)
+                deduped_ids.append(selected_ids[rep])
+
+        # ── Pass 2: Voronoi partition of ALL candidates onto survivors ──────────
+        ded_local   = [id_to_local[fid] for fid in deduped_ids]
+        ded_vecs    = all_vecs[ded_local]           # (D, dim)
+        cross_sim   = ded_vecs @ all_vecs.T         # (D, M)
+        nearest_pos = cross_sim.argmax(axis=0)      # (M,) index into deduped_ids
+
+        cluster_sizes   = {}
+        cluster_members = {sid: [] for sid in deduped_ids}
+        for cand_idx, rep_pos in enumerate(nearest_pos.tolist()):
+            sid  = deduped_ids[rep_pos]
+            cfid = all_candidate_ids[cand_idx]
+            cluster_sizes[sid]   = cluster_sizes.get(sid, 0) + 1
+            cluster_members[sid].append(cfid)
+
+        return deduped_ids, cluster_sizes, cluster_members
 
     def _pool_cache_get(self, key):
         if key in self._pool_cache:
@@ -391,19 +477,18 @@ class VisualSearchEngine:
             cluster_members = {}   # faiss_id → [faiss_ids in cluster]
 
             if diversity > 0.0 and len(valid_ids) > pool_size:
-                # MMR: selects diverse pool AND computes Voronoi inside
+                # MMR: selects diverse pool, then dedup+Voronoi inside (one shot, zero
+                # extra reconstruction — inter_sim is already computed during MMR)
                 selected_ids, cluster_sizes, cluster_members = self._mmr_rerank(
                     text_embedding[0], valid_ids, score_by_id, pool_size, diversity
                 )
             else:
                 # Pure relevance: top-N by FAISS score
                 selected_ids = valid_ids[:pool_size]
-                # Voronoi clustering on the over-fetched candidates so we still
-                # know how many near-duplicates each shown image "represents"
+                # Dedup within pool + Voronoi on over-fetched candidates
                 if len(valid_ids) > pool_size:
-                    cluster_sizes, cluster_members = self._voronoi_clusters(
-                        selected_ids, valid_ids
-                    )
+                    selected_ids, cluster_sizes, cluster_members = \
+                        self._deduplicate_and_voronoi(selected_ids, valid_ids, score_by_id)
 
             # --- Fetch all metadata for the pool ---
             meta_by_id = self._lookup_metadata(selected_ids)
