@@ -30,10 +30,6 @@
         </div>
         <!-- Expanded boards view -->
         <div id="pinbar-expanded-view">
-            <div class="pinbar-exp-header">
-                <span class="pinbar-exp-title">BOARDS</span>
-                <button id="pinbar-collapse-btn">↕ COLLAPSE</button>
-            </div>
             <div id="pinbar-boards-list"></div>
             <!-- Auth area -->
             <div id="pinbar-auth-area">
@@ -52,16 +48,16 @@
             <!-- Image chips: populated dynamically when images are dropped -->
             <div id="image-chips-container" class="image-chips-container"></div>
             <input type="text" id="search-input" placeholder="FISHING BY NIGHT" autofocus>
-            <!-- Clear-all button -->
+            <!-- Clear-all button: just left of the search loupe -->
             <div id="search-clear-area">
-                <button id="clear-all-btn" title="Tout effacer" aria-label="Tout effacer">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                    </svg>
-                </button>
                 <button id="undo-clear-btn" title="Annuler" aria-label="Annuler" style="display:none">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/>
+                    </svg>
+                </button>
+                <button id="clear-all-btn" title="Tout effacer" aria-label="Tout effacer">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                     </svg>
                 </button>
             </div>

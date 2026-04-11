@@ -711,13 +711,27 @@ function newBoard() {
 }
 
 // ── Pinbar: expand / collapse / use for search ────────────────────────────────
+// SVG icons for the expand toggle button
+const ICON_EXPAND_PINBAR  = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 9 12 4 17 9"/><polyline points="17 15 12 20 7 15"/></svg>`;
+const ICON_COLLAPSE_PINBAR = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 9 12 14 7 9"/><polyline points="7 15 12 10 17 15"/></svg>`;
+
+const _expandBtn = document.getElementById('pinbar-expand-btn');
+
 function pinbarExpand() {
     document.body.classList.add('pinbar-expanded');
+    _expandBtn.innerHTML = ICON_COLLAPSE_PINBAR;
+    _expandBtn.title = 'Réduire';
     renderExpandedBoards();
 }
 
 function pinbarCollapse() {
     document.body.classList.remove('pinbar-expanded');
+    _expandBtn.innerHTML = ICON_EXPAND_PINBAR;
+    _expandBtn.title = 'Expand / Collapse boards';
+}
+
+function pinbarToggle() {
+    document.body.classList.contains('pinbar-expanded') ? pinbarCollapse() : pinbarExpand();
 }
 
 function renderExpandedBoards() {
@@ -790,8 +804,7 @@ async function pinbarUseForSearch() {
 // Pinbar button listeners
 document.getElementById('pinbar-use-search-btn').addEventListener('click', pinbarUseForSearch);
 document.getElementById('pinbar-new-btn').addEventListener('click', newBoard);
-document.getElementById('pinbar-expand-btn').addEventListener('click', pinbarExpand);
-document.getElementById('pinbar-collapse-btn').addEventListener('click', pinbarCollapse);
+_expandBtn.addEventListener('click', pinbarToggle);
 
 // ── "Ne plus voir" overlay ────────────────────────────────────────────────────
 let _hideTimerHandle = null;
