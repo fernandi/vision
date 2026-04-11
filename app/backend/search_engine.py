@@ -140,22 +140,35 @@ class VisualSearchEngine:
         n_indexed = self.index.ntotal
         print(f"Search Engine Ready. ({n_indexed} images indexed)")
 
-    def _compute_corpus_mean(self, n_sample: int = 2000):
+    def _compute_corpus_mean(self, n_sample: int = 500):
         """
         Estimate the corpus mean by sampling n_sample random vectors from the index.
         Used by the 'purified' combination mode to subtract the 'generic art' direction.
         """
         if self.index is None or self.index.ntotal == 0:
             return
-        n_sample = min(n_sample, self.index.ntotal)
-        rng = np.random.default_rng(42)
-        sample_ids = rng.choice(self.index.ntotal, n_sample, replace=False)
-        sample_vecs = np.vstack(
-            [self.index.reconstruct(int(i)) for i in sample_ids]
-        ).astype('float32')
+        n_total   = self.index.ntotal
+        n_sample  = min(n_sample, n_total)
+        rng       = np.random.default_rng(42)
+
+        # Try batch reconstruction (works for IndexFlat* and most stored-vector indices).
+        # Fall back to the individual-call loop for index types that don't support it.
+        try:
+            # reconstruct_n(start, n) is a single C++ call — much faster than a loop.
+            # We pick a random contiguous block then subsample from it.
+            start = int(rng.integers(0, max(1, n_total - n_sample)))
+            sample_vecs = np.zeros((n_sample, self.index.d), dtype='float32')
+            self.index.reconstruct_n(start, n_sample, sample_vecs)
+        except Exception:
+            # Fallback: individual reconstruct calls
+            sample_ids  = rng.choice(n_total, n_sample, replace=False)
+            sample_vecs = np.vstack(
+                [self.index.reconstruct(int(i)) for i in sample_ids]
+            ).astype('float32')
+
         norms = np.linalg.norm(sample_vecs, axis=1, keepdims=True)
         sample_vecs /= np.where(norms == 0, 1e-9, norms)
-        cm = sample_vecs.mean(axis=0)
+        cm      = sample_vecs.mean(axis=0)
         norm_cm = np.linalg.norm(cm)
         self.corpus_mean = (cm / (norm_cm + 1e-9)).astype('float32')
         print(f"  ✓ corpus mean estimated (n={n_sample})")
