@@ -157,7 +157,8 @@ function appendCards(results) {
         const card     = document.createElement('div');
         card.className = 'image-card';
         const imgPath  = item.image_url || `/images/${item.filename}`;
-        const title    = item.Title || 'Untitled';
+        const titleRaw  = item.Title || 'Untitled';
+        const title     = titleRaw.length > 140 ? titleRaw.slice(0, 140) + '…' : titleRaw;
         const hasGroup = item.cluster_size != null && item.cluster_size > 1
                          && Array.isArray(item.cluster_member_ids);
         const simCount = hasGroup ? item.cluster_size - 1 : 0;
