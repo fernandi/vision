@@ -58,6 +58,7 @@ body.has-results header {
 body.has-results .search-container {
     width: 100%;
     max-width: none;
+    background-color: white;
 }
 
 /* Drag-over highlight */
