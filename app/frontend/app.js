@@ -1,12 +1,12 @@
-const searchInput    = document.getElementById('search-input');
-const searchBtn      = document.getElementById('search-btn');
-const gallery        = document.getElementById('gallery');
+const searchInput = document.getElementById('search-input');
+const searchBtn = document.getElementById('search-btn');
+const gallery = document.getElementById('gallery');
 const diversityToggle = document.getElementById('diversity-toggle');
-const filterBtn      = document.getElementById('filter-btn');
-const filterPanel    = document.getElementById('filter-panel');
+const filterBtn = document.getElementById('filter-btn');
+const filterPanel = document.getElementById('filter-panel');
 const suggestionBtns = document.querySelectorAll('.suggestion-btn');
 
-const API_URL   = "";
+const API_URL = "";
 const PAGE_SIZE = 20;
 
 // Current diversity value: read from toggle state
@@ -27,10 +27,10 @@ function getNegativeMode() {
 }
 
 // ── State ────────────────────────────────────────────────────────────────────
-let currentQuery  = "";
+let currentQuery = "";
 let currentOffset = 0;
-let isLoading     = false;
-let hasMore       = true;
+let isLoading = false;
+let hasMore = true;
 // Multimodal: array of { src, base64 } objects
 let referenceImages = [];
 // Negative images: array of { src, base64 } objects
@@ -45,19 +45,19 @@ let archivedBoards = JSON.parse(localStorage.getItem('archivedBoards') || '[]');
 
 // ── Saved images ────────────────────────────────────────────────────────────
 // Map: imgPath → { title, author, source, memberIds, clusterSize }
-const savedItems  = new Map();
-const savedPanel  = document.getElementById('saved-panel');
+const savedItems = new Map();
+const savedPanel = document.getElementById('saved-panel');
 const savedThumbs = document.getElementById('saved-thumbs');
 
 const ICON_EXPAND = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>`;
-const ICON_PIN_EMPTY  = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76Z"/></svg>`;
+const ICON_PIN_EMPTY = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76Z"/></svg>`;
 const ICON_PIN_FILLED = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5" fill="none"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76Z"/></svg>`;
-const ICON_EYE_SLASH  = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+const ICON_EYE_SLASH = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
 let currentLbPath = ''; // tracks the image currently shown in the lightbox
 
 // ── Image chips DOM ref ─────────────────────────────────────────────────────────
-const searchContainer   = document.getElementById('search-container');
-const chipsContainer    = document.getElementById('image-chips-container');
+const searchContainer = document.getElementById('search-container');
+const chipsContainer = document.getElementById('image-chips-container');
 
 // ── Sentinel: lives inside the gallery, always at the bottom ───────────────────
 let sentinel = null;
@@ -79,9 +79,9 @@ function placeSentinel() {
 // ── Core search / pagination ───────────────────────────────────────────────────
 async function search(query) {
     if (!query) return;
-    currentQuery  = query;
+    currentQuery = query;
     currentOffset = 0;
-    hasMore       = true;
+    hasMore = true;
 
     document.body.classList.add('has-results');
     gallery.innerHTML = '<div class="placeholder-text">Searching...</div>';
@@ -107,17 +107,19 @@ async function loadNextPage(firstPage = false) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                query:            currentQuery,
-                page_size:        PAGE_SIZE,
-                offset:           currentOffset,
-                diversity:        getDiversity(),
+                query: currentQuery,
+                page_size: PAGE_SIZE,
+                offset: currentOffset,
+                diversity: getDiversity(),
                 combination_mode: getCombinationMode(),
                 ...(referenceImages.length
                     ? { reference_images: referenceImages.map(r => r.base64), image_weight: 0.5 }
                     : {}),
                 ...(referenceNegativeImages.length
-                    ? { negative_images: referenceNegativeImages.map(r => r.base64),
-                        negative_mode: getNegativeMode() }
+                    ? {
+                        negative_images: referenceNegativeImages.map(r => r.base64),
+                        negative_mode: getNegativeMode()
+                    }
                     : {}),
             }),
         });
@@ -154,19 +156,18 @@ function appendCards(results) {
     if (sentinel) sentinel.remove();
 
     results.forEach(item => {
-        const card     = document.createElement('div');
+        const card = document.createElement('div');
         card.className = 'image-card';
-        const imgPath  = item.image_url || `/images/${item.filename}`;
-        const titleRaw  = item.Title || 'Untitled';
-        const title     = titleRaw.length > 140 ? titleRaw.slice(0, 140) + '…' : titleRaw;
+        const imgPath = item.image_url || `/images/${item.filename}`;
+        const titleRaw = item.Title || 'Untitled';
+        const title = titleRaw.length > 140 ? titleRaw.slice(0, 140) + '…' : titleRaw;
         const hasGroup = item.cluster_size != null && item.cluster_size > 1
-                         && Array.isArray(item.cluster_member_ids);
+            && Array.isArray(item.cluster_member_ids);
         const simCount = hasGroup ? item.cluster_size - 1 : 0;
 
         const titleHTML = hasGroup
             ? `<div class="title title-with-similar">
-                 <span>${title}</span>
-                 <span class="similar-count">&nbsp;·&nbsp;${simCount}&nbsp;SIMILAIRE${simCount > 1 ? 'S' : ''}</span>
+                 <span>${title}  +${simCount}</span>
                </div>`
             : `<div class="title">${title}</div>`;
 
@@ -189,35 +190,35 @@ function appendCards(results) {
         // Expand → lightbox
         const expandBtn = document.createElement('button');
         expandBtn.className = 'card-action-btn card-action-expand';
-        expandBtn.title     = 'Agrandir';
+        expandBtn.title = 'Agrandir';
         expandBtn.innerHTML = ICON_EXPAND;
         expandBtn.addEventListener('click', e => {
             e.stopPropagation();
             openLightbox(imgPath, title, item.Author, item.source,
                 hasGroup ? item.cluster_member_ids : null,
-                hasGroup ? item.cluster_size       : null);
+                hasGroup ? item.cluster_size : null);
         });
 
         // Save → saved panel
         const saveBtn = document.createElement('button');
-        saveBtn.className   = 'card-action-btn card-action-save';
+        saveBtn.className = 'card-action-btn card-action-save';
         saveBtn.dataset.src = imgPath;
-        saveBtn.title       = 'Épingler';
+        saveBtn.title = 'Épingler';
         const isSaved = savedItems.has(imgPath);
-        saveBtn.innerHTML   = isSaved ? ICON_PIN_FILLED : ICON_PIN_EMPTY;
+        saveBtn.innerHTML = isSaved ? ICON_PIN_FILLED : ICON_PIN_EMPTY;
         if (isSaved) saveBtn.classList.add('saved');
         saveBtn.addEventListener('click', e => {
             e.stopPropagation();
             toggleSaved(imgPath, title, item.Author, item.source,
                 hasGroup ? item.cluster_member_ids : null,
-                hasGroup ? item.cluster_size       : null);
+                hasGroup ? item.cluster_size : null);
         });
 
         // Hide → 'ne plus voir' overlay
         const hideBtn = document.createElement('button');
-        hideBtn.className   = 'card-action-btn card-action-hide';
-        hideBtn.title       = 'Ne plus voir';
-        hideBtn.innerHTML   = ICON_EYE_SLASH;
+        hideBtn.className = 'card-action-btn card-action-hide';
+        hideBtn.title = 'Ne plus voir';
+        hideBtn.innerHTML = ICON_EYE_SLASH;
         hideBtn.addEventListener('click', e => {
             e.stopPropagation();
             showHideOverlay(card, imgWrap, imgPath, title, item.Author, item.source,
@@ -236,7 +237,7 @@ function appendCards(results) {
         img.addEventListener('dragstart', e => {
             e.dataTransfer.effectAllowed = 'copy';
             e.dataTransfer.setData('text/uri-list', imgPath);
-            e.dataTransfer.setData('text/plain',    imgPath);
+            e.dataTransfer.setData('text/plain', imgPath);
         });
 
 
@@ -246,26 +247,26 @@ function appendCards(results) {
 }
 
 // ── Lightbox (single image + optional similar strip) ──────────────────────────
-const lightbox    = document.getElementById('lightbox');
-const lbImg       = document.getElementById('lightbox-img');
-const lbTitle     = document.getElementById('lightbox-title');
-const lbAuthor    = document.getElementById('lightbox-author');
-const lbMuseum    = document.getElementById('lightbox-museum');
-const lbDownload  = document.getElementById('lightbox-download');
-const lbPin       = document.getElementById('lightbox-pin');
-const lbClose     = document.querySelector('#lightbox .lightbox-close');
+const lightbox = document.getElementById('lightbox');
+const lbImg = document.getElementById('lightbox-img');
+const lbTitle = document.getElementById('lightbox-title');
+const lbAuthor = document.getElementById('lightbox-author');
+const lbMuseum = document.getElementById('lightbox-museum');
+const lbDownload = document.getElementById('lightbox-download');
+const lbPin = document.getElementById('lightbox-pin');
+const lbClose = document.querySelector('#lightbox .lightbox-close');
 const lbSimilaires = document.getElementById('lb-similaires');
-const lbSimLabel  = document.getElementById('lb-sim-label');
-const lbSimStrip  = document.getElementById('lb-sim-strip');
+const lbSimLabel = document.getElementById('lb-sim-label');
+const lbSimStrip = document.getElementById('lb-sim-strip');
 
 const MUSEUM_NAMES = {
-    artic:     'ART INSTITUTE OF CHICAGO',
-    met:       'THE MET',
-    rijks:     'RIJKSMUSEUM',
+    artic: 'ART INSTITUTE OF CHICAGO',
+    met: 'THE MET',
+    rijks: 'RIJKSMUSEUM',
     cleveland: 'CLEVELAND MUSEUM OF ART',
-    harvard:   'HARVARD ART MUSEUMS',
-    lacma:     'LACMA',
-    chicago:   'ART INSTITUTE OF CHICAGO',
+    harvard: 'HARVARD ART MUSEUMS',
+    lacma: 'LACMA',
+    chicago: 'ART INSTITUTE OF CHICAGO',
 };
 
 /**
@@ -280,16 +281,16 @@ const MUSEUM_NAMES = {
 async function openLightbox(src, title, author, source, memberIds = null, clusterSize = null) {
     currentLbPath = src;
     lbImg.src = src;
-    lbTitle.textContent   = (title  || 'Untitled').toUpperCase();
-    lbAuthor.textContent  = (author && author !== 'N/A') ? author.toUpperCase() : '';
-    lbMuseum.textContent  = MUSEUM_NAMES[source] || (source || '').toUpperCase();
-    lbDownload.href       = src;
-    lbDownload.download   = src.split('/').pop();
+    lbTitle.textContent = (title || 'Untitled').toUpperCase();
+    lbAuthor.textContent = (author && author !== 'N/A') ? author.toUpperCase() : '';
+    lbMuseum.textContent = MUSEUM_NAMES[source] || (source || '').toUpperCase();
+    lbDownload.href = src;
+    lbDownload.download = src.split('/').pop();
     lbPin.classList.toggle('pinned', savedItems.has(src));
 
     // Reset similar strip
     lbSimilaires.classList.remove('has-items');
-    lbSimStrip.innerHTML  = '';
+    lbSimStrip.innerHTML = '';
     lbSimLabel.textContent = '';
 
     lightbox.classList.add('open');
@@ -310,9 +311,9 @@ async function openLightbox(src, title, author, source, memberIds = null, cluste
 
         try {
             const resp = await fetch(`${API_URL}/cluster-members`, {
-                method:  'POST',
+                method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body:    JSON.stringify({ faiss_ids: memberIds }),
+                body: JSON.stringify({ faiss_ids: memberIds }),
             });
             if (!resp.ok) throw new Error('Failed to load similaires');
             const data = await resp.json();
@@ -320,11 +321,11 @@ async function openLightbox(src, title, author, source, memberIds = null, cluste
             lbSimStrip.innerHTML = '';
             data.results.forEach(member => {
                 const memberPath = member.image_url || `/images/${member.filename}`;
-                const isActive   = memberPath === src;
+                const isActive = memberPath === src;
 
                 const thumb = document.createElement('div');
                 thumb.className = 'lb-sim-thumb' + (isActive ? ' active' : '');
-                thumb.title     = member.Title || '';
+                thumb.title = member.Title || '';
                 thumb.innerHTML = `<img src="${memberPath}" alt="${member.Title || ''}" loading="lazy">`;
 
                 thumb.addEventListener('click', () => {
@@ -333,12 +334,12 @@ async function openLightbox(src, title, author, source, memberIds = null, cluste
                     lbImg.style.opacity = '0';
                     lbImg.src = memberPath;
                     lbImg.onload = () => { lbImg.style.opacity = '1'; };
-                    lbTitle.textContent   = (member.Title  || 'Untitled').toUpperCase();
-                    lbAuthor.textContent  = (member.Author && member.Author !== 'N/A')
-                                            ? member.Author.toUpperCase() : '';
-                    lbMuseum.textContent  = MUSEUM_NAMES[member.source] || (member.source || '').toUpperCase();
-                    lbDownload.href       = memberPath;
-                    lbDownload.download   = memberPath.split('/').pop();
+                    lbTitle.textContent = (member.Title || 'Untitled').toUpperCase();
+                    lbAuthor.textContent = (member.Author && member.Author !== 'N/A')
+                        ? member.Author.toUpperCase() : '';
+                    lbMuseum.textContent = MUSEUM_NAMES[member.source] || (member.source || '').toUpperCase();
+                    lbDownload.href = memberPath;
+                    lbDownload.download = memberPath.split('/').pop();
                     // Sync pin state for the newly shown image
                     currentLbPath = memberPath;
                     lbPin.classList.toggle('pinned', savedItems.has(memberPath));
@@ -373,11 +374,11 @@ lbPin.addEventListener('click', () => {
     const d = savedItems.get(currentLbPath);
     toggleSaved(
         currentLbPath,
-        d ? d.title  : lbTitle.textContent,
+        d ? d.title : lbTitle.textContent,
         d ? d.author : lbAuthor.textContent,
         d ? d.source : null,
-        d ? d.memberIds    : null,
-        d ? d.clusterSize  : null
+        d ? d.memberIds : null,
+        d ? d.clusterSize : null
     );
 });
 
@@ -409,19 +410,19 @@ function toggleSaved(imgPath, title, author, source, memberIds, clusterSize) {
 
 function addSavedThumb(imgPath, title, author, source, memberIds, clusterSize) {
     const thumb = document.createElement('div');
-    thumb.className  = 'saved-thumb';
+    thumb.className = 'saved-thumb';
     thumb.dataset.src = imgPath;
-    thumb.title      = title;
+    thumb.title = title;
 
     const img = document.createElement('img');
-    img.src  = imgPath;
-    img.alt  = title;
+    img.src = imgPath;
+    img.alt = title;
     thumb.appendChild(img);
 
     // × remove button
     const rm = document.createElement('button');
-    rm.className   = 'saved-thumb-remove';
-    rm.title       = 'Retirer';
+    rm.className = 'saved-thumb-remove';
+    rm.title = 'Retirer';
     rm.textContent = '×';
     rm.addEventListener('click', e => {
         e.stopPropagation();
@@ -441,10 +442,10 @@ function addSavedThumb(imgPath, title, author, source, memberIds, clusterSize) {
 
 // ── Cluster group lightbox (kept for backward compat, no longer primary entry) ─
 const clusterLightbox = document.getElementById('cluster-lightbox');
-const clusterGrid     = document.getElementById('cluster-grid');
-const clusterLabel    = document.getElementById('cluster-label');
-const clusterBack     = document.getElementById('cluster-back');
-const clusterClose    = document.querySelector('.cluster-close');
+const clusterGrid = document.getElementById('cluster-grid');
+const clusterLabel = document.getElementById('cluster-label');
+const clusterBack = document.getElementById('cluster-back');
+const clusterClose = document.querySelector('.cluster-close');
 
 function closeClusterLightbox() {
     clusterLightbox.classList.remove('open');
@@ -452,15 +453,15 @@ function closeClusterLightbox() {
     clusterGrid.innerHTML = '';
 }
 
-clusterBack.addEventListener('click',  closeClusterLightbox);
+clusterBack.addEventListener('click', closeClusterLightbox);
 clusterClose.addEventListener('click', closeClusterLightbox);
 
 // Escape: close panel → cluster lightbox → regular lightbox (priority order)
 document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    if (filterPanel.classList.contains('open'))        { closeFilterPanel();        return; }
-    if (clusterLightbox.classList.contains('open'))    { closeClusterLightbox();    return; }
-    if (lightbox.classList.contains('open'))           { closeLightbox(); }
+    if (filterPanel.classList.contains('open')) { closeFilterPanel(); return; }
+    if (clusterLightbox.classList.contains('open')) { closeClusterLightbox(); return; }
+    if (lightbox.classList.contains('open')) { closeLightbox(); }
 });
 
 // ── Event listeners ────────────────────────────────────────────────────────────
@@ -521,7 +522,7 @@ document.addEventListener('click', (e) => {
 function blobToBase64(blob) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload  = () => resolve(reader.result.split(',')[1]);
+        reader.onload = () => resolve(reader.result.split(',')[1]);
         reader.onerror = reject;
         reader.readAsDataURL(blob);
     });
@@ -533,7 +534,7 @@ function addImageChip(src, base64) {
     referenceImages.push({ src, base64 });
 
     const chip = document.createElement('div');
-    chip.className   = 'image-chip';
+    chip.className = 'image-chip';
     chip.dataset.idx = idx;
 
     const thumb = document.createElement('img');
@@ -542,8 +543,8 @@ function addImageChip(src, base64) {
     chip.appendChild(thumb);
 
     const btn = document.createElement('button');
-    btn.className   = 'image-chip-remove';
-    btn.ariaLabel   = 'Remove image';
+    btn.className = 'image-chip-remove';
+    btn.ariaLabel = 'Remove image';
     btn.textContent = '×';
     btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -591,7 +592,7 @@ searchContainer.addEventListener('drop', async (e) => {
 
     try {
         const uriList = e.dataTransfer.getData('text/uri-list')
-                     || e.dataTransfer.getData('text/plain');
+            || e.dataTransfer.getData('text/plain');
 
         if (uriList && uriList.trim()) {
             const url = uriList.trim().split('\n')[0];
@@ -599,7 +600,7 @@ searchContainer.addEventListener('drop', async (e) => {
             if (isLocal) {
                 const resp = await fetch(url);
                 const blob = await resp.blob();
-                const b64  = await blobToBase64(blob);
+                const b64 = await blobToBase64(blob);
                 addImageChip(url, b64);
                 return;
             }
@@ -629,7 +630,7 @@ async function imgUrlToBase64(url) {
 
 // ── Update has-content class for clear button visibility ─────────────────────
 function updateHasContent() {
-    const hasText   = searchInput.value.trim().length > 0;
+    const hasText = searchInput.value.trim().length > 0;
     const hasImages = referenceImages.length > 0 || referenceNegativeImages.length > 0;
     searchContainer.classList.toggle('has-content', hasText || hasImages);
 }
@@ -638,8 +639,8 @@ searchInput.addEventListener('input', updateHasContent);
 // ── Clear all ─────────────────────────────────────────────────────────────────
 function clearAll() {
     clearSnapshot = {
-        text:     searchInput.value,
-        images:   [...referenceImages],
+        text: searchInput.value,
+        images: [...referenceImages],
         negImages: [...referenceNegativeImages],
     };
     searchInput.value = '';
@@ -677,7 +678,7 @@ document.getElementById('undo-clear-btn').addEventListener('click', undoClear);
 
 // ── Board system ──────────────────────────────────────────────────────────────
 function _boardLabel() {
-    const now   = new Date();
+    const now = new Date();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const isToday = now.getTime() >= today.getTime();
@@ -685,16 +686,16 @@ function _boardLabel() {
         return now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     }
     return now.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })
-           + ' ' + now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        + ' ' + now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 }
 
 function newBoard() {
     if (savedItems.size === 0) return;
     const archived = {
-        id:        Date.now(),
-        name:      _boardLabel(),
+        id: Date.now(),
+        name: _boardLabel(),
         createdAt: new Date().toISOString(),
-        images:    Array.from(savedItems.entries()).map(([src, d]) => ({ src, ...d })),
+        images: Array.from(savedItems.entries()).map(([src, d]) => ({ src, ...d })),
     };
     archivedBoards.unshift(archived);
     localStorage.setItem('archivedBoards', JSON.stringify(archivedBoards));
@@ -861,7 +862,7 @@ function showHideOverlay(card, imgWrap, imgPath, title, author, source, memberId
                     addNegativeChipEl(imgPath, b64);
                     updateHasContent();
                     if (currentQuery) search(currentQuery);
-                } catch(e) { console.error('negative:', e); }
+                } catch (e) { console.error('negative:', e); }
             } else if (action === 'taste') {
                 // Persist in localStorage
                 const denylist = JSON.parse(localStorage.getItem('denylist') || '[]');
@@ -875,7 +876,7 @@ function showHideOverlay(card, imgWrap, imgPath, title, author, source, memberId
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ img_path: imgPath }),
-                }).catch(() => {});
+                }).catch(() => { });
             }
             dismissHideOverlay(card, overlay, imgPath);
         });
@@ -919,9 +920,9 @@ function addNegativeChipEl(src, base64, skipPush = false) {
     // Show negative mode section in filter panel
     document.getElementById('negative-mode-section').hidden = false;
 
-    const idx  = referenceNegativeImages.length - 1;
+    const idx = referenceNegativeImages.length - 1;
     const chip = document.createElement('div');
-    chip.className   = 'image-chip negative';
+    chip.className = 'image-chip negative';
     chip.dataset.idx = idx;
     chip.dataset.neg = '1';
 
@@ -930,8 +931,8 @@ function addNegativeChipEl(src, base64, skipPush = false) {
     chip.appendChild(thumb);
 
     const btn = document.createElement('button');
-    btn.className   = 'image-chip-remove';
-    btn.ariaLabel   = 'Remove negative image';
+    btn.className = 'image-chip-remove';
+    btn.ariaLabel = 'Remove negative image';
     btn.textContent = '×';
     btn.addEventListener('click', e => {
         e.stopPropagation();
@@ -965,20 +966,20 @@ document.querySelectorAll('input[name="negative-mode"]').forEach(radio => {
 });
 
 // ── Magic link auth (pinbar expanded view) ────────────────────────────────────
-const pinbarMagicBtn   = document.getElementById('pinbar-magic-btn');
+const pinbarMagicBtn = document.getElementById('pinbar-magic-btn');
 const pinbarEmailInput = document.getElementById('pinbar-email-input');
 const pinbarAuthStatus = document.getElementById('pinbar-auth-status');
 
 pinbarMagicBtn.addEventListener('click', async () => {
     const email = pinbarEmailInput.value.trim();
     if (!email) return;
-    pinbarMagicBtn.disabled   = true;
+    pinbarMagicBtn.disabled = true;
     pinbarMagicBtn.textContent = '...';
     try {
         const resp = await fetch('/auth/request', {
-            method:  'POST',
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ email }),
+            body: JSON.stringify({ email }),
         });
         const data = await resp.json();
         pinbarAuthStatus.hidden = false;
@@ -991,7 +992,7 @@ pinbarMagicBtn.addEventListener('click', async () => {
         pinbarAuthStatus.hidden = false;
         pinbarAuthStatus.textContent = 'Network error';
     } finally {
-        pinbarMagicBtn.disabled   = false;
+        pinbarMagicBtn.disabled = false;
         pinbarMagicBtn.textContent = 'SEND LINK';
     }
 });
