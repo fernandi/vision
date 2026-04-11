@@ -109,12 +109,19 @@ function appendCards(results) {
         card.className = 'image-card';
         const imgPath = item.image_url || `/images/${item.filename}`;
         const title   = item.Title || 'Untitled';
+
+        // Cluster badge: only shown when MMR is active (cluster_size present)
+        const clusterBadge = (item.cluster_size != null)
+            ? `<span class="cluster-badge" title="${item.cluster_size} images similaires regroupées ici">×${item.cluster_size}</span>`
+            : '';
+
         card.innerHTML = `
             <img src="${imgPath}" alt="${title}" loading="lazy">
             <div class="image-info">
                 <div class="title">${title}</div>
                 <div class="author">${item.Author || 'Unknown'}</div>
             </div>
+            ${clusterBadge}
         `;
         card.addEventListener('click', () => openLightbox(imgPath, title, item.Author, item.source));
         gallery.appendChild(card);

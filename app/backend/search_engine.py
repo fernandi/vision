@@ -193,9 +193,16 @@ class VisualSearchEngine:
         diversity=0.0 → pure relevance (FAISS order)
         diversity=1.0 → pure diversity
         diversity=0.5 → recommended default
+
+        Returns:
+            (selected_ids, cluster_sizes) where cluster_sizes is a dict mapping
+            each selected faiss_id to its Voronoi cluster size: the number of
+            candidates (from the full fetch_k pool) that are nearest to it.
+            This tells you how many images were "represented" / suppressed by
+            each selected result.
         """
         if not candidate_ids:
-            return []
+            return [], {}
 
         n = len(candidate_ids)
         k = min(k, n)
@@ -241,7 +248,23 @@ class VisualSearchEngine:
             selected.append(chosen)
             mask[chosen] = False
 
-        return [candidate_ids[i] for i in selected]
+        selected_ids = [candidate_ids[i] for i in selected]
+
+        # ── Voronoi cluster sizes ──────────────────────────────────────────────
+        # Assign each of the N candidates to its nearest selected item.
+        # inter_sim[selected, :] has shape (S, N); argmax along axis=0 gives,
+        # for every candidate, the position in `selected` it is closest to.
+        # We then count how many candidates fall into each selected bucket.
+        # This is almost free: inter_sim is already fully computed above.
+        selected_arr = np.array(selected)          # (S,)
+        # (S, N) slice → argmax over axis=0 → (N,) index into `selected`
+        nearest_selected_pos = inter_sim[selected_arr, :].argmax(axis=0)  # (N,)
+        cluster_sizes = {}
+        for pos, fid in zip(nearest_selected_pos, range(n)):
+            sid = selected_ids[pos]
+            cluster_sizes[sid] = cluster_sizes.get(sid, 0) + 1
+
+        return selected_ids, cluster_sizes
 
     def _pool_cache_get(self, key):
         if key in self._pool_cache:
@@ -315,8 +338,9 @@ class VisualSearchEngine:
             }
 
             # --- MMR re-rank to pool_size ---
+            cluster_sizes = {}  # faiss_id → Voronoi cluster size (only when MMR active)
             if diversity > 0.0 and len(valid_ids) > pool_size:
-                selected_ids = self._mmr_rerank(
+                selected_ids, cluster_sizes = self._mmr_rerank(
                     text_embedding[0], valid_ids, score_by_id, pool_size, diversity
                 )
             else:
@@ -330,6 +354,8 @@ class VisualSearchEngine:
                     continue
                 item = dict(meta_by_id[fid])
                 item['score'] = score_by_id.get(fid, 0.0)
+                if cluster_sizes:
+                    item['cluster_size'] = cluster_sizes.get(fid, 1)
                 pool.append(item)
 
             self._pool_cache_set(cache_key, pool)
