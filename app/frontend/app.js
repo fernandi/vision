@@ -35,8 +35,9 @@ const savedPanel  = document.getElementById('saved-panel');
 const savedThumbs = document.getElementById('saved-thumbs');
 
 const ICON_EXPAND = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>`;
-const ICON_BOOKMARK_EMPTY  = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`;
-const ICON_BOOKMARK_FILLED = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`;
+const ICON_PIN_EMPTY  = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76Z"/></svg>`;
+const ICON_PIN_FILLED = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5" fill="none"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76Z"/></svg>`;
+let currentLbPath = ''; // tracks the image currently shown in the lightbox
 
 // ── Image chips DOM ref ─────────────────────────────────────────────────────────
 const searchContainer   = document.getElementById('search-container');
@@ -180,16 +181,15 @@ function appendCards(results) {
         const saveBtn = document.createElement('button');
         saveBtn.className   = 'card-action-btn card-action-save';
         saveBtn.dataset.src = imgPath;
-        saveBtn.title       = 'Enregistrer';
+        saveBtn.title       = 'Épingler';
         const isSaved = savedItems.has(imgPath);
-        saveBtn.innerHTML   = isSaved ? ICON_BOOKMARK_FILLED : ICON_BOOKMARK_EMPTY;
+        saveBtn.innerHTML   = isSaved ? ICON_PIN_FILLED : ICON_PIN_EMPTY;
         if (isSaved) saveBtn.classList.add('saved');
         saveBtn.addEventListener('click', e => {
             e.stopPropagation();
             toggleSaved(imgPath, title, item.Author, item.source,
                 hasGroup ? item.cluster_member_ids : null,
-                hasGroup ? item.cluster_size       : null,
-                saveBtn);
+                hasGroup ? item.cluster_size       : null);
         });
 
         actions.appendChild(expandBtn);
@@ -223,6 +223,7 @@ const lbTitle     = document.getElementById('lightbox-title');
 const lbAuthor    = document.getElementById('lightbox-author');
 const lbMuseum    = document.getElementById('lightbox-museum');
 const lbDownload  = document.getElementById('lightbox-download');
+const lbPin       = document.getElementById('lightbox-pin');
 const lbClose     = document.querySelector('#lightbox .lightbox-close');
 const lbSimilaires = document.getElementById('lb-similaires');
 const lbSimLabel  = document.getElementById('lb-sim-label');
@@ -248,12 +249,14 @@ const MUSEUM_NAMES = {
  * @param {number|null}   clusterSize
  */
 async function openLightbox(src, title, author, source, memberIds = null, clusterSize = null) {
+    currentLbPath = src;
     lbImg.src = src;
     lbTitle.textContent   = (title  || 'Untitled').toUpperCase();
     lbAuthor.textContent  = (author && author !== 'N/A') ? author.toUpperCase() : '';
     lbMuseum.textContent  = MUSEUM_NAMES[source] || (source || '').toUpperCase();
     lbDownload.href       = src;
     lbDownload.download   = src.split('/').pop();
+    lbPin.classList.toggle('pinned', savedItems.has(src));
 
     // Reset similar strip
     lbSimilaires.classList.remove('has-items');
@@ -307,6 +310,9 @@ async function openLightbox(src, title, author, source, memberIds = null, cluste
                     lbMuseum.textContent  = MUSEUM_NAMES[member.source] || (member.source || '').toUpperCase();
                     lbDownload.href       = memberPath;
                     lbDownload.download   = memberPath.split('/').pop();
+                    // Sync pin state for the newly shown image
+                    currentLbPath = memberPath;
+                    lbPin.classList.toggle('pinned', savedItems.has(memberPath));
                     // Update active state
                     lbSimStrip.querySelectorAll('.lb-sim-thumb').forEach(t => t.classList.remove('active'));
                     thumb.classList.add('active');
@@ -332,20 +338,42 @@ function closeLightbox() {
 lbClose.addEventListener('click', closeLightbox);
 lightbox.addEventListener('click', e => { if (e.target === lightbox) closeLightbox(); });
 
+// Lightbox PIN button
+lbPin.addEventListener('click', () => {
+    if (!currentLbPath) return;
+    const d = savedItems.get(currentLbPath);
+    toggleSaved(
+        currentLbPath,
+        d ? d.title  : lbTitle.textContent,
+        d ? d.author : lbAuthor.textContent,
+        d ? d.source : null,
+        d ? d.memberIds    : null,
+        d ? d.clusterSize  : null
+    );
+});
+
 // ── Saved images management ─────────────────────────────────────────────────────────
-function toggleSaved(imgPath, title, author, source, memberIds, clusterSize, btn) {
-    if (savedItems.has(imgPath)) {
+function toggleSaved(imgPath, title, author, source, memberIds, clusterSize) {
+    const nowPinned = !savedItems.has(imgPath);
+    if (nowPinned) {
+        savedItems.set(imgPath, { title, author, source, memberIds, clusterSize });
+        addSavedThumb(imgPath, title, author, source, memberIds, clusterSize);
+    } else {
         savedItems.delete(imgPath);
         savedThumbs.querySelectorAll('.saved-thumb').forEach(t => {
             if (t.dataset.src === imgPath) t.remove();
         });
-        btn.classList.remove('saved');
-        btn.innerHTML = ICON_BOOKMARK_EMPTY;
-    } else {
-        savedItems.set(imgPath, { title, author, source, memberIds, clusterSize });
-        addSavedThumb(imgPath, title, author, source, memberIds, clusterSize);
-        btn.classList.add('saved');
-        btn.innerHTML = ICON_BOOKMARK_FILLED;
+    }
+    // Sync ALL gallery pin buttons for this image
+    document.querySelectorAll('.card-action-save').forEach(b => {
+        if (b.dataset.src === imgPath) {
+            b.classList.toggle('saved', nowPinned);
+            b.innerHTML = nowPinned ? ICON_PIN_FILLED : ICON_PIN_EMPTY;
+        }
+    });
+    // Sync lightbox PIN button if same image is open
+    if (currentLbPath === imgPath) {
+        lbPin.classList.toggle('pinned', nowPinned);
     }
     document.body.classList.toggle('has-saved', savedItems.size > 0);
 }
@@ -368,16 +396,8 @@ function addSavedThumb(imgPath, title, author, source, memberIds, clusterSize) {
     rm.textContent = '×';
     rm.addEventListener('click', e => {
         e.stopPropagation();
-        savedItems.delete(imgPath);
-        thumb.remove();
-        document.body.classList.toggle('has-saved', savedItems.size > 0);
-        // Un-highlight any visible save buttons for this image
-        document.querySelectorAll('.card-action-save').forEach(b => {
-            if (b.dataset.src === imgPath) {
-                b.classList.remove('saved');
-                b.innerHTML = ICON_BOOKMARK_EMPTY;
-            }
-        });
+        // toggleSaved will remove from savedItems, remove thumb, and sync all buttons
+        toggleSaved(imgPath, title, author, source, memberIds, clusterSize);
     });
     thumb.appendChild(rm);
 

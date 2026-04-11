@@ -464,6 +464,36 @@ body.has-results.has-saved .gallery {
     opacity: 0.5;
 }
 
+/* PIN + DOWNLOAD grouped */
+.lightbox-actions {
+    display: flex;
+    align-items: flex-end;
+    gap: 1.2rem;
+    flex-shrink: 0;
+}
+
+/* PIN: same text style as DOWNLOAD, dimmed until active */
+.lb-pin-btn {
+    font-family: inherit;
+    font-weight: 700;
+    font-size: inherit;
+    text-transform: uppercase;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    color: black;
+    opacity: 0.3;
+    white-space: nowrap;
+    transition: opacity 0.15s;
+    align-self: flex-end;
+}
+
+.lb-pin-btn:hover,
+.lb-pin-btn.pinned {
+    opacity: 1;
+}
+
 /* × close — top right, pure CSS cross */
 .lightbox-close {
     /* ── tweak these ── */

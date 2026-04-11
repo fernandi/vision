@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Visual Search</title>
-    <link rel="stylesheet" href="style.css?v=12">
+    <link rel="stylesheet" href="style.css?v=13">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -136,7 +136,10 @@
                     <span id="lightbox-museum"></span>
                 </div>
             </div>
-            <a id="lightbox-download" href="" download class="download-btn">DOWNLOAD</a>
+            <div class="lightbox-actions">
+                <button id="lightbox-pin" class="lb-pin-btn">PIN</button>
+                <a id="lightbox-download" href="" download class="download-btn">DOWNLOAD</a>
+            </div>
         </div>
         <button class="lightbox-close" aria-label="Fermer"></button>
     </div>
@@ -154,7 +157,7 @@
         </div>
         <div id="cluster-grid" class="cluster-grid"></div>
     </div>
-    <script src="app.js?v=12"></script>
+    <script src="app.js?v=13"></script>
 </body>
 
 </html>
