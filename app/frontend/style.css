@@ -606,24 +606,82 @@ body.has-results .gallery {
     40%            { transform: scale(1.0); opacity: 1;   }
 }
 
-/* ── Diversity toggle ─────────────────────────────────────────────────────── */
-.diversity-toggle {
-    /* Hidden in hero mode */
-    display: none;
+/* ── Filter button (+) ─────────────────────────────────────────────────────── */
+.filter-btn {
+    display: none;          /* hidden in hero mode */
     align-items: center;
-    gap: 0.5rem;
+    justify-content: center;
     background: none;
     border: none;
     cursor: pointer;
-    padding: 0 1.2rem 0 0.6rem;
-    white-space: nowrap;
-    flex-shrink: 0;
+    padding: 0 1.2rem;
     height: 100%;
+    flex-shrink: 0;
+    color: #000;
     user-select: none;
 }
 
-body.has-results .diversity-toggle {
-    display: flex; /* slide in when results present */
+body.has-results .filter-btn {
+    display: flex;
+}
+
+.filter-btn-icon {
+    font-family: 'Inter', sans-serif;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1;
+    opacity: 0.45;
+    transition: opacity 0.15s;
+    display: block;
+    /* Rotate to × when panel is open */
+    transition: transform 0.2s ease, opacity 0.15s;
+}
+
+.filter-btn:hover .filter-btn-icon {
+    opacity: 0.85;
+}
+
+.filter-btn[aria-expanded="true"] .filter-btn-icon {
+    transform: rotate(45deg);
+    opacity: 0.85;
+}
+
+/* ── Filter panel ─────────────────────────────────────────────────────────── */
+.filter-panel {
+    position: fixed;
+    top: var(--header-compact-h);
+    right: 0;
+    z-index: 900;           /* below lightboxes, above gallery */
+    background: var(--bg-color);
+    border-left: 1px solid rgba(0,0,0,0.06);
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    padding: 1rem 1.5rem 1.2rem;
+    min-width: 180px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    /* Hidden by default */
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-6px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.filter-panel.open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+/* Section label inside panel */
+.filter-panel-label {
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #000;
+    opacity: 0.35;
+    margin-bottom: 0.1rem;
 }
 
 /* The pill track */
@@ -657,6 +715,20 @@ body.has-results .diversity-toggle {
 
 .diversity-toggle[aria-pressed="true"] .toggle-thumb {
     transform: translateX(12px);
+}
+
+/* ── Diversity toggle (now lives inside filter panel) ─────────────────────── */
+.diversity-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    white-space: nowrap;
+    user-select: none;
+    width: 100%;
 }
 
 .toggle-label {

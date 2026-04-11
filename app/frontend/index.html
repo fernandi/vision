@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Visual Search</title>
-    <link rel="stylesheet" href="style.css?v=8">
+    <link rel="stylesheet" href="style.css?v=9">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -24,14 +24,23 @@
                 </svg>
             </button>
         </div>
-        <!-- Diversity toggle — hidden until first search -->
-        <button id="diversity-toggle" class="diversity-toggle" aria-pressed="true" title="Toggle diversity (MMR)">
+        <!-- Filter button: visible after first search, top-right -->
+        <button id="filter-btn" class="filter-btn" aria-label="Filtres" aria-expanded="false">
+            <span class="filter-btn-icon">+</span>
+        </button>
+    </header>
+
+    <!-- Filter panel: drops from top-right -->
+    <div id="filter-panel" class="filter-panel" aria-hidden="true">
+        <!-- Diversity toggle -->
+        <button id="diversity-toggle" class="diversity-toggle" aria-pressed="false" title="Toggle diversity (MMR)">
             <span class="toggle-track">
                 <span class="toggle-thumb"></span>
             </span>
             <span class="toggle-label">DIVERSITY</span>
         </button>
-    </header>
+        <!-- Future filters go here -->
+    </div>
 
     <main id="gallery" class="gallery">
         <!-- Images will be injected here -->
@@ -73,7 +82,7 @@
         </div>
         <div id="cluster-grid" class="cluster-grid"></div>
     </div>
-    <script src="app.js?v=8"></script>
+    <script src="app.js?v=9"></script>
 </body>
 
 </html>

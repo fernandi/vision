@@ -2,6 +2,8 @@ const searchInput    = document.getElementById('search-input');
 const searchBtn      = document.getElementById('search-btn');
 const gallery        = document.getElementById('gallery');
 const diversityToggle = document.getElementById('diversity-toggle');
+const filterBtn      = document.getElementById('filter-btn');
+const filterPanel    = document.getElementById('filter-panel');
 const suggestionBtns = document.querySelectorAll('.suggestion-btn');
 
 const API_URL   = "";
@@ -274,11 +276,12 @@ function closeClusterLightbox() {
 clusterBack.addEventListener('click',  closeClusterLightbox);
 clusterClose.addEventListener('click', closeClusterLightbox);
 
-// Escape: close lightboxes
+// Escape: close panel → cluster lightbox → regular lightbox (priority order)
 document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    if (clusterLightbox.classList.contains('open')) { closeClusterLightbox(); return; }
-    if (lightbox.classList.contains('open'))        { closeLightbox(); }
+    if (filterPanel.classList.contains('open'))        { closeFilterPanel();        return; }
+    if (clusterLightbox.classList.contains('open'))    { closeClusterLightbox();    return; }
+    if (lightbox.classList.contains('open'))           { closeLightbox(); }
 });
 
 // ── Event listeners ────────────────────────────────────────────────────────────
@@ -299,3 +302,33 @@ diversityToggle.addEventListener('click', () => {
     diversityToggle.setAttribute('aria-pressed', isOn ? 'false' : 'true');
     if (currentQuery) search(currentQuery);
 });
+
+// ── Filter panel (+) ────────────────────────────────────────────────────────────
+function openFilterPanel() {
+    filterPanel.classList.add('open');
+    filterBtn.setAttribute('aria-expanded', 'true');
+    filterPanel.removeAttribute('aria-hidden');
+}
+
+function closeFilterPanel() {
+    filterPanel.classList.remove('open');
+    filterBtn.setAttribute('aria-expanded', 'false');
+    filterPanel.setAttribute('aria-hidden', 'true');
+}
+
+filterBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = filterPanel.classList.contains('open');
+    isOpen ? closeFilterPanel() : openFilterPanel();
+});
+
+// Close panel when clicking outside
+document.addEventListener('click', (e) => {
+    if (filterPanel.classList.contains('open')
+        && !filterPanel.contains(e.target)
+        && e.target !== filterBtn) {
+        closeFilterPanel();
+    }
+});
+
+
