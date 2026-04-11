@@ -110,6 +110,22 @@ def search(req: SearchRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+class ClusterRequest(BaseModel):
+    faiss_ids: List[int]
+
+@app.post("/cluster-members")
+def cluster_members(req: ClusterRequest):
+    """Return full metadata for a list of FAISS IDs (cluster group view)."""
+    try:
+        ensure_loaded()
+        items = search_engine.get_items_by_ids(req.faiss_ids)
+        for item in items:
+            item["image_url"] = get_image_url(item)
+        return {"results": items}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Mount static files (local only)
 if ENV == "local":
     if os.path.exists("data/images"):

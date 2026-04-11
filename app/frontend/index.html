@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Visual Search</title>
-    <link rel="stylesheet" href="style.css?v=6">
+    <link rel="stylesheet" href="style.css?v=7">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -54,7 +54,21 @@
         </div>
         <button class="lightbox-close" aria-label="Fermer"></button>
     </div>
-    <script src="app.js?v=6"></script>
+    <!-- Cluster group lightbox -->
+    <div id="cluster-lightbox" class="cluster-lightbox" role="dialog" aria-modal="true">
+        <div class="cluster-header">
+            <button class="cluster-back" id="cluster-back" aria-label="Retour">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <span id="cluster-label" class="cluster-label"></span>
+            <button class="lightbox-close cluster-close" aria-label="Fermer"></button>
+        </div>
+        <div id="cluster-grid" class="cluster-grid"></div>
+    </div>
+    <script src="app.js?v=7"></script>
 </body>
 
 </html>

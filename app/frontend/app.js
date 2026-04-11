@@ -100,19 +100,21 @@ async function loadNextPage(firstPage = false) {
     }
 }
 
-// ── Render helpers ─────────────────────────────────────────────────────────────
+// ── Render helpers ────────────────────────────────────────────────────────────
 function appendCards(results) {
-    if (sentinel) sentinel.remove(); // remove before appending cards
+    if (sentinel) sentinel.remove();
 
     results.forEach(item => {
-        const card    = document.createElement('div');
+        const card     = document.createElement('div');
         card.className = 'image-card';
-        const imgPath = item.image_url || `/images/${item.filename}`;
-        const title   = item.Title || 'Untitled';
+        const imgPath  = item.image_url || `/images/${item.filename}`;
+        const title    = item.Title || 'Untitled';
+        const hasGroup = item.cluster_size != null && item.cluster_size > 1
+                         && Array.isArray(item.cluster_member_ids);
 
-        // Cluster badge: only shown when MMR is active (cluster_size present)
+        // Cluster badge
         const clusterBadge = (item.cluster_size != null)
-            ? `<span class="cluster-badge" title="${item.cluster_size} images similaires regroupées ici">×${item.cluster_size}</span>`
+            ? `<span class="cluster-badge" title="${item.cluster_size} images similaires">×${item.cluster_size}</span>`
             : '';
 
         card.innerHTML = `
@@ -123,19 +125,27 @@ function appendCards(results) {
             </div>
             ${clusterBadge}
         `;
-        card.addEventListener('click', () => openLightbox(imgPath, title, item.Author, item.source));
+
+        card.addEventListener('click', () => {
+            if (hasGroup) {
+                openClusterView(item.cluster_member_ids, title, item.cluster_size);
+            } else {
+                openLightbox(imgPath, title, item.Author, item.source);
+            }
+        });
+
         gallery.appendChild(card);
     });
 }
 
-// ── Lightbox ───────────────────────────────────────────────────────────────────
+// ── Lightbox (single image) ──────────────────────────────────────────────────────
 const lightbox   = document.getElementById('lightbox');
 const lbImg      = document.getElementById('lightbox-img');
 const lbTitle    = document.getElementById('lightbox-title');
 const lbAuthor   = document.getElementById('lightbox-author');
 const lbMuseum   = document.getElementById('lightbox-museum');
 const lbDownload = document.getElementById('lightbox-download');
-const lbClose    = document.querySelector('.lightbox-close');
+const lbClose    = document.querySelector('#lightbox .lightbox-close');
 
 const MUSEUM_NAMES = {
     artic:     'ART INSTITUTE OF CHICAGO',
@@ -166,7 +176,71 @@ function closeLightbox() {
 
 lbClose.addEventListener('click', closeLightbox);
 lightbox.addEventListener('click', e => { if (e.target === lightbox) closeLightbox(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+// ── Cluster group lightbox ──────────────────────────────────────────────────────
+const clusterLightbox = document.getElementById('cluster-lightbox');
+const clusterGrid     = document.getElementById('cluster-grid');
+const clusterLabel    = document.getElementById('cluster-label');
+const clusterBack     = document.getElementById('cluster-back');
+const clusterClose    = document.querySelector('.cluster-close');
+
+function closeClusterLightbox() {
+    clusterLightbox.classList.remove('open');
+    document.body.style.overflow = '';
+    clusterGrid.innerHTML = '';
+}
+
+async function openClusterView(memberIds, representativeTitle, clusterSize) {
+    // Open overlay immediately with a loading spinner
+    clusterLabel.textContent = `${clusterSize} image${clusterSize > 1 ? 's' : ''} similaires`;
+    clusterGrid.innerHTML = '<div class="cluster-loading"><span></span><span></span><span></span></div>';
+    clusterLightbox.classList.add('open');
+    document.body.style.overflow = 'hidden';
+
+    try {
+        const resp = await fetch(`${API_URL}/cluster-members`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ faiss_ids: memberIds }),
+        });
+        if (!resp.ok) throw new Error('Failed to load cluster');
+        const data = await resp.json();
+        renderClusterGrid(data.results);
+    } catch (err) {
+        clusterGrid.innerHTML = `<p style="color:#666;padding:2rem">Erreur: ${err.message}</p>`;
+    }
+}
+
+function renderClusterGrid(items) {
+    clusterGrid.innerHTML = '';
+    items.forEach(item => {
+        const imgPath = item.image_url || `/images/${item.filename}`;
+        const title   = item.Title || 'Untitled';
+
+        const thumb = document.createElement('div');
+        thumb.className = 'cluster-thumb';
+        thumb.innerHTML = `
+            <img src="${imgPath}" alt="${title}" loading="lazy">
+            <div class="cluster-thumb-info">${title}</div>
+        `;
+        thumb.addEventListener('click', () => {
+            // Close cluster view, open regular lightbox
+            closeClusterLightbox();
+            openLightbox(imgPath, title, item.Author, item.source);
+        });
+        clusterGrid.appendChild(thumb);
+    });
+}
+
+clusterBack.addEventListener('click',  closeClusterLightbox);
+clusterClose.addEventListener('click', closeClusterLightbox);
+
+// Escape: close cluster first, then regular lightbox if open
+document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (clusterLightbox.classList.contains('open')) { closeClusterLightbox(); return; }
+    if (lightbox.classList.contains('open'))        { closeLightbox(); }
+});
 
 // ── Event listeners ────────────────────────────────────────────────────────────
 searchBtn.addEventListener('click', () => search(searchInput.value.trim()));

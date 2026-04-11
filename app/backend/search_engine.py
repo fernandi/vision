@@ -250,21 +250,23 @@ class VisualSearchEngine:
 
         selected_ids = [candidate_ids[i] for i in selected]
 
-        # ── Voronoi cluster sizes ──────────────────────────────────────────────
+        # ── Voronoi cluster sizes + member lists ──────────────────────────────────
         # Assign each of the N candidates to its nearest selected item.
-        # inter_sim[selected, :] has shape (S, N); argmax along axis=0 gives,
-        # for every candidate, the position in `selected` it is closest to.
-        # We then count how many candidates fall into each selected bucket.
-        # This is almost free: inter_sim is already fully computed above.
-        selected_arr = np.array(selected)          # (S,)
-        # (S, N) slice → argmax over axis=0 → (N,) index into `selected`
+        # inter_sim[selected_arr, :] has shape (S, N); argmax over axis=0
+        # gives, for every candidate, which centroid it is closest to.
+        selected_arr = np.array(selected)                      # (S,)
         nearest_selected_pos = inter_sim[selected_arr, :].argmax(axis=0)  # (N,)
-        cluster_sizes = {}
-        for pos, fid in zip(nearest_selected_pos, range(n)):
-            sid = selected_ids[pos]
-            cluster_sizes[sid] = cluster_sizes.get(sid, 0) + 1
 
-        return selected_ids, cluster_sizes
+        cluster_sizes   = {}                         # faiss_id → count
+        cluster_members = {sid: [] for sid in selected_ids}  # faiss_id → [faiss_ids]
+
+        for candidate_local_idx, centroid_local_pos in enumerate(nearest_selected_pos):
+            sid  = selected_ids[int(centroid_local_pos)]
+            cfid = candidate_ids[candidate_local_idx]
+            cluster_sizes[sid]   = cluster_sizes.get(sid, 0) + 1
+            cluster_members[sid].append(cfid)
+
+        return selected_ids, cluster_sizes, cluster_members
 
     def _pool_cache_get(self, key):
         if key in self._pool_cache:
@@ -338,9 +340,10 @@ class VisualSearchEngine:
             }
 
             # --- MMR re-rank to pool_size ---
-            cluster_sizes = {}  # faiss_id → Voronoi cluster size (only when MMR active)
+            cluster_sizes   = {}   # faiss_id → Voronoi count
+            cluster_members = {}   # faiss_id → [faiss_ids in cluster]
             if diversity > 0.0 and len(valid_ids) > pool_size:
-                selected_ids, cluster_sizes = self._mmr_rerank(
+                selected_ids, cluster_sizes, cluster_members = self._mmr_rerank(
                     text_embedding[0], valid_ids, score_by_id, pool_size, diversity
                 )
             else:
@@ -355,7 +358,14 @@ class VisualSearchEngine:
                 item = dict(meta_by_id[fid])
                 item['score'] = score_by_id.get(fid, 0.0)
                 if cluster_sizes:
-                    item['cluster_size'] = cluster_sizes.get(fid, 1)
+                    item['cluster_size']       = cluster_sizes.get(fid, 1)
+                    # Sort members by FAISS score (descending) so most
+                    # relevant image in each cluster comes first
+                    members = cluster_members.get(fid, [fid])
+                    members_sorted = sorted(members,
+                                           key=lambda x: score_by_id.get(x, 0.0),
+                                           reverse=True)
+                    item['cluster_member_ids'] = members_sorted
                 pool.append(item)
 
             self._pool_cache_set(cache_key, pool)
@@ -367,3 +377,15 @@ class VisualSearchEngine:
             "total": len(pool),
             "has_more": (offset + page_size) < len(pool),
         }
+
+    def get_items_by_ids(self, faiss_ids):
+        """
+        Return metadata for a list of FAISS IDs (used by /cluster-members endpoint).
+        Preserves the order of faiss_ids.
+        """
+        meta_by_id = self._lookup_metadata(faiss_ids)
+        result = []
+        for fid in faiss_ids:
+            if fid in meta_by_id:
+                result.append(dict(meta_by_id[fid]))
+        return result
