@@ -1,32 +1,45 @@
 """
-Front-end dev server: serves app/frontend locally and forwards API calls to a
-running Glane backend (production by default), so the UI can be worked on
-without loading the model and index on this machine (~3 GB of RAM).
+Local development server for the Glane front end.
 
-    python dev_server.py                      # → http://localhost:5173
-    python dev_server.py --api http://localhost:8000 --native
+    python dev_server.py        → http://localhost:5173
 
-The deployed backend may predate v0.2 endpoints. Unless --native is given,
-they are emulated here on top of the older API:
-- `reference_ids` / `negative_ids` are turned into uploaded images, fetched
-  server-side where museum CDNs don't enforce CORS;
-- POST /collection-zip is built here with the same code as the backend.
+- serves app/frontend;
+- search and images go to a remote backend (production by default), so the
+  model and index (~3 GB of RAM) never load on this machine;
+- accounts (/auth/*, /api/*) run here, on SQLite (data/dev-accounts.db); emails
+  are not sent but listed at http://localhost:5173/auth/dev-outbox.
+
+The remote backend may predate v0.2. Unless --native is given, v0.2 search
+features are emulated on top of it: `reference_ids` / `negative_ids` become
+uploaded images (fetched here, where museum CDNs don't enforce CORS), and
+POST /collection-zip is built here with the backend's own code.
+With --native, everything (accounts included) goes to --api untouched.
 """
 import argparse
 import base64
 import json
 import mimetypes
 import os
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
-from app.backend import zip_export
-
-FRONTEND = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app", "frontend")
-API_PREFIXES = ("/search", "/cluster-members", "/collection-zip", "/health", "/auth/", "/flag")
+ROOT = os.path.dirname(os.path.abspath(__file__))
+FRONTEND = os.path.join(ROOT, "app", "frontend")
+SEARCH_PREFIXES = ("/search", "/cluster-members", "/collection-zip", "/health", "/flag")
+ACCOUNT_PREFIXES = ("/auth/", "/api/")
+PASS_HEADERS = ("content-type", "location", "set-cookie", "cache-control", "x-missing")
 UA = {"User-Agent": "Mozilla/5.0 (Glane dev server)"}
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None   # hand 30x responses (and their cookies) back to the browser
+
+
+_opener = urllib.request.build_opener(_NoRedirect)
 
 
 def _post_json(url, payload):
@@ -50,8 +63,24 @@ def _ids_to_base64(api, ids):
     return out
 
 
+def start_accounts(port, front_port):
+    """Run the real accounts router (no ML dependencies) in a background thread."""
+    os.environ.setdefault("ENV", "local")
+    os.environ.setdefault("PUBLIC_BASE_URL", f"http://localhost:{front_port}")
+    os.environ.setdefault("SQLITE_PATH", os.path.join(ROOT, "data", "dev-accounts.db"))
+    import uvicorn
+    from fastapi import FastAPI
+    from app.backend import accounts, db
+    db.init()
+    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    app.include_router(accounts.router)
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
+    threading.Thread(target=server.run, daemon=True).start()
+
+
 class Handler(SimpleHTTPRequestHandler):
     api = ""
+    accounts_api = ""
     native = False
 
     def __init__(self, *a, **kw):
@@ -62,23 +91,30 @@ class Handler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     def log_message(self, fmt, *args):
-        if not self.path.startswith(("/search", "/cluster", "/auth")):
-            return
-        super().log_message(fmt, *args)
+        if self.path.startswith(("/search", "/cluster", "/auth", "/api", "/collection-zip")):
+            super().log_message(fmt, *args)
 
-    def _is_api(self):
-        return self.path.startswith(API_PREFIXES)
+    def _upstream(self):
+        if self.path.startswith(ACCOUNT_PREFIXES):
+            return self.accounts_api
+        if self.path.startswith(SEARCH_PREFIXES):
+            return self.api
+        return None
+
+    def _body(self):
+        return self.rfile.read(int(self.headers.get("Content-Length") or 0))
 
     def do_GET(self):
-        if self._is_api():
-            return self._forward("GET", None)
+        upstream = self._upstream()
+        if upstream:
+            return self._forward("GET", None, upstream)
         return super().do_GET()
 
     def do_POST(self):
-        body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
-        if self.path == "/collection-zip" and not self.native:
+        body = self._body()
+        if not self.native and self.path == "/collection-zip":
             return self._collection_zip(json.loads(body or b"{}"))
-        if self.path == "/search" and not self.native:
+        if not self.native and self.path == "/search":
             payload = json.loads(body or b"{}")
             ref_ids = payload.pop("reference_ids", None)
             neg_ids = payload.pop("negative_ids", None)
@@ -87,57 +123,71 @@ class Handler(SimpleHTTPRequestHandler):
             if neg_ids:
                 payload["negative_images"] = (payload.get("negative_images") or []) + _ids_to_base64(self.api, neg_ids)
             body = json.dumps(payload).encode()
-        return self._forward("POST", body)
+        return self._forward("POST", body, self._upstream() or self.api)
+
+    def do_PUT(self):
+        return self._forward("PUT", self._body(), self._upstream() or self.api)
+
+    def do_DELETE(self):
+        return self._forward("DELETE", self._body() or None, self._upstream() or self.api)
 
     def _collection_zip(self, payload):
+        from app.backend import zip_export
         ids = payload.get("faiss_ids", [])[:zip_export.MAX_ITEMS]
         items = _post_json(f"{self.api}/cluster-members", {"faiss_ids": ids})["results"] if ids else []
         data, missing = zip_export.build_zip(items)
         name = urllib.parse.quote(f"{zip_export.safe_name(payload.get('name', ''))}.zip")
-        self._reply(200, data, "application/zip", {
-            "Content-Disposition": f"attachment; filename*=UTF-8''{name}",
-            "X-Missing": str(missing),
-        })
+        self._reply(200, data, [("Content-Type", "application/zip"),
+                                ("Content-Disposition", f"attachment; filename*=UTF-8''{name}"),
+                                ("X-Missing", str(missing))])
 
-    def _reply(self, status, data, ctype, extra=None):
+    def _reply(self, status, data, headers):
         try:
             self.send_response(status)
-            self.send_header("Content-Type", ctype)
-            self.send_header("Content-Length", str(len(data)))
-            for k, v in (extra or {}).items():
+            for k, v in headers:
                 self.send_header(k, v)
+            self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)
         except ConnectionError:
             pass  # the browser dropped a superseded request
 
-    def _forward(self, method, body):
-        headers = {k: v for k, v in self.headers.items()
-                   if k.lower() in ("content-type", "cookie", "accept")}
-        req = urllib.request.Request(self.api + self.path, data=body, method=method,
-                                     headers={**headers, **UA})
+    def _forward(self, method, body, upstream):
+        headers = {k: v for k, v in self.headers.items() if k.lower() in ("content-type", "cookie", "accept")}
+        req = urllib.request.Request(upstream + self.path, data=body, method=method, headers={**headers, **UA})
         try:
-            with urllib.request.urlopen(req, timeout=180) as r:
-                status, data, ctype = r.status, r.read(), r.headers.get("Content-Type", "application/json")
+            resp = _opener.open(req, timeout=180)
         except urllib.error.HTTPError as e:
-            status, data, ctype = e.code, e.read(), e.headers.get("Content-Type", "text/plain")
+            resp = e   # includes 30x, kept un-followed by _NoRedirect
         except urllib.error.URLError as e:
-            status, data, ctype = 502, json.dumps({"detail": str(e)}).encode(), "application/json"
-        self._reply(status, data, ctype)
+            return self._reply(502, json.dumps({"detail": str(e)}).encode(), [("Content-Type", "application/json")])
+        with resp:
+            data = resp.read()
+            passed = [(k, v) for k, v in resp.headers.items() if k.lower() in PASS_HEADERS]
+            status = resp.code
+        self._reply(status, data, passed)
 
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--api", default="https://glane.heretique.fr", help="backend to forward API calls to")
+    p.add_argument("--api", default="https://glane.heretique.fr", help="backend for search and images")
     p.add_argument("--port", type=int, default=5173)
+    p.add_argument("--accounts-port", type=int, default=5174)
     p.add_argument("--native", action="store_true",
-                   help="backend already runs v0.2: forward everything untouched")
+                   help="--api already runs v0.2: forward everything to it, accounts included")
     args = p.parse_args()
     mimetypes.add_type("text/javascript", ".js")
     mimetypes.add_type("font/woff2", ".woff2")
     Handler.api = args.api.rstrip("/")
     Handler.native = args.native
-    print(f"Glane dev: http://localhost:{args.port}   (API: {Handler.api})", flush=True)
+    if args.native:
+        Handler.accounts_api = Handler.api
+    else:
+        start_accounts(args.accounts_port, args.port)
+        Handler.accounts_api = f"http://127.0.0.1:{args.accounts_port}"
+    print(f"Glane dev: http://localhost:{args.port}   (search: {Handler.api}, accounts: {Handler.accounts_api})", flush=True)
+    if not args.native:
+        print(f"Sign-in emails (dev): http://localhost:{args.port}/auth/dev-outbox", flush=True)
     ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
 
 

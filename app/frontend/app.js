@@ -112,7 +112,10 @@ const Collections = {
                 })),
             };
         }
-        for (const c of data.list) c.createdAt ??= createdFromId(c.id);
+        for (const c of data.list) {
+            c.createdAt ??= createdFromId(c.id);
+            c.updatedAt ??= c.createdAt;
+        }
         if (!data.v2) {
             // v0.2 no longer creates a default collection: drop the old empty one.
             data.list = data.list.filter(c => !(c.name === 'My collection' && !c.items.length));
@@ -124,6 +127,12 @@ const Collections = {
         this.save();
     },
     save() { store.set('glane.collections', this.data); },
+    // Every change goes through touch(): stamps the collection and queues it for the account.
+    touch(id) {
+        const c = this.get(id);
+        if (c) { c.updatedAt = Math.max(Date.now(), (c.updatedAt || 0) + 1); Sync.markDirty(id); }
+        this.save();
+    },
     all() { return this.data.list; },
     get(id) { return this.data.list.find(c => c.id === id); },
     active() { return this.get(this.data.activeId) || null; },
@@ -135,7 +144,7 @@ const Collections = {
     cover(c) {
         return (c.coverKey && c.items.find(i => itemKey(i) === c.coverKey)) || c.items[0] || null;
     },
-    setCover(id, item) { this.get(id).coverKey = itemKey(item); this.save(); },
+    setCover(id, item) { this.get(id).coverKey = itemKey(item); this.touch(id); },
     contains(id, item) {
         const c = this.get(id);
         const k = itemKey(item);
@@ -144,7 +153,7 @@ const Collections = {
     add(id, item) {
         if (this.contains(id, item)) return false;
         this.get(id).items.unshift({ ...item });
-        this.save();
+        this.touch(id);
         return true;
     },
     removeItem(id, item) {
@@ -153,24 +162,34 @@ const Collections = {
         const idx = c.items.findIndex(i => itemKey(i) === k);
         if (idx < 0) return -1;
         c.items.splice(idx, 1);
-        this.save();
+        this.touch(id);
         return idx;
     },
     insertAt(id, item, idx) {
         const c = this.get(id);
         if (!this.contains(id, item)) c.items.splice(Math.max(0, idx), 0, { ...item });
-        this.save();
+        this.touch(id);
     },
     create(name) {
-        const c = { id: uid(), name: name || `Collection ${this.data.list.length + 1}`, items: [], createdAt: Date.now(), coverKey: null };
+        const now = Date.now();
+        const c = { id: uid(), name: name || `Collection ${this.data.list.length + 1}`, items: [], createdAt: now, updatedAt: now, coverKey: null };
         this.data.list.push(c);
-        this.save();
+        this.touch(c.id);
         return c;
     },
-    rename(id, name) { const c = this.get(id); if (c && name.trim()) { c.name = name.trim(); this.save(); } },
+    rename(id, name) { const c = this.get(id); if (c && name.trim()) { c.name = name.trim(); this.touch(id); } },
     remove(id) {
         this.data.list = this.data.list.filter(c => c.id !== id);
+        this.fixActive();
+        Sync.markDeleted(id);
+        this.save();
+    },
+    fixActive() {
         if (!this.get(this.data.activeId)) this.data.activeId = this.data.list.at(-1)?.id ?? null;
+    },
+    replaceAll(list) {
+        this.data.list = list.sort((a, b) => a.createdAt - b.createdAt);
+        this.fixActive();
         this.save();
     },
 };
@@ -1452,24 +1471,238 @@ new ResizeObserver(() => {
     document.documentElement.style.setProperty('--topbar-h', `${$('sidebar').offsetHeight}px`);
 }).observe($('sidebar'));
 
-// ── Account (magic link; accounts are wired in lot 2) ───────────────────────
+// ── Account: sign-in by email link + collections saved to the account ──────
+class HttpError extends Error {
+    constructor(status, detail) { super(detail || `HTTP ${status}`); this.status = status; }
+}
+
+async function api(path, { method = 'GET', body, keepalive = false } = {}) {
+    const resp = await fetch(`${API}${path}`, {
+        method,
+        keepalive,
+        headers: body ? { 'Content-Type': 'application/json' } : {},
+        body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new HttpError(resp.status, typeof data.detail === 'string' ? data.detail : '');
+    return data;
+}
+
+const toServer = c => ({
+    name: c.name,
+    created_at: c.createdAt,
+    updated_at: c.updatedAt || c.createdAt,
+    cover_key: c.coverKey || null,
+    items: c.items.filter(i => /^https?:\/\//.test(i.src)),
+});
+const fromServer = c => ({
+    id: c.id, name: c.name, createdAt: c.created_at, updatedAt: c.updated_at, coverKey: c.cover_key, items: c.items,
+});
+
+const SYNC_TEXT = {
+    pending: 'Saving…',
+    saved: 'All changes are saved to your account.',
+    offline: 'Offline. Changes will be saved as soon as the connection is back.',
+};
+
+const Sync = {
+    email: null,
+    available: true,
+    dirty: new Set(),
+    deleted: new Map(),       // id → deletion time
+    timer: null,
+    busy: false,
+
+    get on() { return Boolean(this.email); },
+    markDirty(id) {
+        if (!this.on) return;
+        this.dirty.add(id);
+        this.deleted.delete(id);
+        this.schedule();
+    },
+    markDeleted(id) {
+        if (!this.on) return;
+        this.dirty.delete(id);
+        this.deleted.set(id, Date.now());
+        this.schedule();
+    },
+    schedule(delay = 700) {
+        clearTimeout(this.timer);
+        this.setState('pending');
+        this.timer = setTimeout(() => this.flush(), delay);
+    },
+    setState(state) { $('sync-status').textContent = SYNC_TEXT[state]; },
+
+    async flush(keepalive = false) {
+        if (!this.on) return;
+        if (this.busy) { this.schedule(); return; }
+        this.busy = true;
+        let changed = false;
+        try {
+            for (const id of [...this.dirty]) {
+                const c = Collections.get(id);
+                this.dirty.delete(id);
+                if (!c) continue;
+                try {
+                    const res = await api(`/api/collections/${encodeURIComponent(id)}`, { method: 'PUT', body: toServer(c), keepalive });
+                    if (res.status === 'stale') {
+                        // Changed more recently on another device: adopt that version.
+                        const others = Collections.all().filter(x => x.id !== id);
+                        Collections.replaceAll(res.deleted ? others : [...others, fromServer(res.collection)]);
+                        changed = true;
+                    }
+                } catch (err) {
+                    this.dirty.add(id);
+                    throw err;
+                }
+            }
+            for (const [id, at] of [...this.deleted]) {
+                this.deleted.delete(id);
+                try {
+                    await api(`/api/collections/${encodeURIComponent(id)}?updated_at=${at}`, { method: 'DELETE', keepalive });
+                } catch (err) {
+                    this.deleted.set(id, at);
+                    throw err;
+                }
+            }
+            this.setState('saved');
+        } catch (err) {
+            if (err.status === 401) { this.expired(); return; }
+            console.error('sync', err);
+            this.setState('offline');
+            clearTimeout(this.timer);
+            this.timer = setTimeout(() => this.flush(), 8000);
+        } finally {
+            this.busy = false;
+            if (changed) repaintAll();
+        }
+    },
+
+    // First sign-in on a device: the guest's collections join the account.
+    async pullAndMerge() {
+        const data = await api('/api/collections');
+        const server = new Map(data.collections.map(c => [c.id, fromServer(c)]));
+        const deleted = new Set(data.deleted);
+        const merged = [];
+        let uploaded = 0;
+        for (const c of Collections.all()) {
+            if (deleted.has(c.id)) continue;
+            const remote = server.get(c.id);
+            server.delete(c.id);
+            if (!remote) { merged.push(c); this.dirty.add(c.id); uploaded++; continue; }
+            if ((c.updatedAt || 0) > remote.updatedAt) { merged.push(c); this.dirty.add(c.id); }
+            else merged.push(remote);
+        }
+        merged.push(...server.values());
+        Collections.replaceAll(merged);
+        repaintAll();
+        if (view === 'collection' && !Collections.get(viewingId)) backToResults();
+        if (this.dirty.size) await this.flush();
+        else this.setState('saved');
+        return uploaded;
+    },
+
+    expired() {
+        this.email = null;
+        this.dirty.clear();
+        this.deleted.clear();
+        renderAccount();
+        toast('Your session has ended. Sign in again to keep saving your collections.');
+    },
+};
+
+function renderAccount() {
+    $('account-out').hidden = Sync.on;
+    $('account-in').hidden = !Sync.on;
+    $('account-email').textContent = Sync.email || '';
+    $('auth-form').hidden = !Sync.available;
+    $('account-intro').textContent = Sync.available
+        ? 'Sign in with your email to keep your collections on every device. No password: we send you a link.'
+        : 'Accounts are coming soon. For now, collections are kept in this browser.';
+}
+
+function showAuthStatus(text, extraLink = null) {
+    const note = $('auth-status');
+    note.replaceChildren(text);
+    if (extraLink) {
+        const a = el('a', null, extraLink.label);
+        a.href = extraLink.href;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        note.append(' ', a);
+    }
+    note.hidden = false;
+}
+
 $('auth-form').addEventListener('submit', async e => {
     e.preventDefault();
     const email = $('auth-email').value.trim();
     const btn = $('auth-btn');
-    const statusNote = $('auth-status');
     btn.disabled = true;
+    btn.textContent = 'SENDING…';
     try {
-        await postJSON('/auth/request', { email });
-        statusNote.textContent = `Link sent to ${email}. Check your inbox.`;
+        const res = await api('/auth/request', { method: 'POST', body: { email } });
+        showAuthStatus(`Check your inbox: a sign-in link is on its way to ${email}. It works once, for 15 minutes.`,
+            res.dev_outbox ? { label: 'Open the dev outbox', href: res.dev_outbox } : null);
     } catch (err) {
         console.error(err);
-        statusNote.textContent = 'Could not send the link. Please try again.';
+        showAuthStatus(err.status === 503 ? 'Sign-in is not available yet.' : (err.message || 'The link could not be sent. Please try again.'));
     } finally {
-        statusNote.hidden = false;
         btn.disabled = false;
+        btn.textContent = 'SEND LINK';
     }
 });
+
+$('logout-btn').addEventListener('click', async () => {
+    clearTimeout(Sync.timer);
+    await Sync.flush();
+    try { await api('/auth/logout', { method: 'POST' }); } catch (err) { console.error(err); }
+    Sync.email = null;
+    // Collections now live in the account: leave nothing behind on a shared computer.
+    Collections.replaceAll([]);
+    renderAccount();
+    if (view === 'collection') backToResults();
+    repaintAll();
+    toast('Signed out. Your collections are safe in your account.');
+});
+
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && (Sync.dirty.size || Sync.deleted.size)) Sync.flush(true);
+});
+
+async function initAccount() {
+    const params = new URLSearchParams(location.search);
+    const signedIn = params.has('signed_in');
+    const loginError = params.get('login_error');
+    if (signedIn || loginError) {
+        params.delete('signed_in');
+        params.delete('login_error');
+        const qs = params.toString();
+        history.replaceState(null, '', qs ? `?${qs}` : location.pathname);
+    }
+    try {
+        const s = await api('/auth/session');
+        Sync.available = s.available !== false;
+        Sync.email = s.authenticated ? s.email : null;
+    } catch (err) {
+        console.error('session', err);
+        Sync.available = false;
+    }
+    renderAccount();
+    if (loginError) toast('This sign-in link has expired or was already used. Ask for a new one.');
+    if (!Sync.on) return;
+    try {
+        const uploaded = await Sync.pullAndMerge();
+        if (signedIn) {
+            toast(uploaded
+                ? `Signed in as ${Sync.email}. ${uploaded} collection${uploaded > 1 ? 's' : ''} from this browser now saved to your account.`
+                : `Signed in as ${Sync.email}.`);
+        }
+    } catch (err) {
+        if (err.status === 401) Sync.expired();
+        else { console.error(err); Sync.setState('offline'); }
+    }
+}
 
 // ── Init ────────────────────────────────────────────────────────────────────
 Collections.load();
@@ -1478,3 +1711,4 @@ recosGrid.build();
 renderSidebarCollections();
 renderChips();
 restoreFromUrl();
+initAccount();

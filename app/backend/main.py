@@ -1,9 +1,10 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from typing import List, Optional
+from urllib.parse import quote
 import os
 import time
 import base64
@@ -13,13 +14,8 @@ import numpy as np
 import torch
 from PIL import Image
 
-from urllib.parse import quote
-
-from fastapi import Response
-
-from app.backend import zip_export
+from app.backend import accounts, db, zip_export
 from app.backend.search_engine import VisualSearchEngine
-from app.backend.auth import router as auth_router
 
 ENV = os.environ.get("ENV", "local")
 HF_SOURCE_DATASET = os.environ.get("HF_SOURCE_DATASET", "Mitsua/art-museums-pd-440k")
@@ -27,6 +23,9 @@ HF_SOURCE_DATASET = os.environ.get("HF_SOURCE_DATASET", "Mitsua/art-museums-pd-4
 # Eager startup: load the model + index before accepting requests
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    db.init()
+    if not accounts.enabled():
+        print("[startup] accounts disabled: set AUTH_SECRET and PUBLIC_BASE_URL")
     print("[startup] Loading search engine...")
     t0 = time.time()
     try:
@@ -38,21 +37,24 @@ async def lifespan(app: FastAPI):
     yield
     # Nothing to tear down
 
-app = FastAPI(title="Art Visual Search", lifespan=lifespan)
+_public_docs = {} if ENV != "production" else {"docs_url": None, "redoc_url": None, "openapi_url": None}
+app = FastAPI(title="Art Visual Search", lifespan=lifespan, **_public_docs)
 
-# CORS
+# Search stays callable from any origin, but never with the session cookie:
+# account routes only work from the site itself.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Missing"],
 )
 
 # Search Engine Instance
 search_engine = VisualSearchEngine()
 _load_lock = __import__("threading").Lock()
-app.include_router(auth_router)
+app.include_router(accounts.router)
 
 def ensure_loaded():
     """Load the search engine lazily on first request."""
@@ -194,7 +196,6 @@ def collection_zip(req: ZipRequest):
     return Response(data, media_type="application/zip", headers={
         "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
         "X-Missing": str(missing),
-        "Access-Control-Expose-Headers": "X-Missing",
     })
 
 

@@ -11,3 +11,4 @@ tokenizers==0.22.2
 safetensors==0.7.0
 httpx==0.28.1
 tqdm==4.67.1
+psycopg[binary]==3.2.13

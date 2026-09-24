@@ -8,7 +8,7 @@
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Ctext x='16' y='23' font-family='Arial' font-weight='700' font-size='20' fill='%23fff' text-anchor='middle'%3EG%3C/text%3E%3C/svg%3E">
     <link rel="preload" href="fonts/JunicodeVF-Roman.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="fonts/JunicodeVF-Italic.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="style.css?v=23">
+    <link rel="stylesheet" href="style.css?v=24">
 </head>
 
 <body>
@@ -91,12 +91,19 @@
 
             <section class="sb-section sb-account">
                 <span class="sb-label">ACCOUNT</span>
-                <p class="sb-note">Sign in to keep your collections on every device.</p>
-                <form id="auth-form" class="auth-form">
-                    <input type="email" id="auth-email" placeholder="your@email.com" required aria-label="Email">
-                    <button type="submit" id="auth-btn" class="pill-btn">SEND LINK</button>
-                </form>
-                <p id="auth-status" class="sb-note" hidden></p>
+                <div id="account-out">
+                    <p id="account-intro" class="sb-note">Sign in with your email to keep your collections on every device. No password: we send you a link.</p>
+                    <form id="auth-form" class="auth-form">
+                        <input type="email" id="auth-email" placeholder="your@email.com" required aria-label="Email" autocomplete="email">
+                        <button type="submit" id="auth-btn" class="pill-btn">SEND LINK</button>
+                    </form>
+                    <p id="auth-status" class="sb-note auth-status" role="status" hidden></p>
+                </div>
+                <div id="account-in" hidden>
+                    <p class="account-email" id="account-email"></p>
+                    <p class="sb-note sync-status" id="sync-status" role="status"></p>
+                    <button type="button" id="logout-btn" class="link-btn">SIGN OUT</button>
+                </div>
             </section>
         </div>
     </aside>
@@ -184,7 +191,7 @@
         <button type="button" id="toast-action" class="toast-action" hidden></button>
     </div>
 
-    <script src="app.js?v=23"></script>
+    <script src="app.js?v=24"></script>
 </body>
 
 </html>

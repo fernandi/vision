@@ -389,6 +389,10 @@ body.is-dragging #new-collection-btn { opacity: 1; outline: 2px dashed var(--fai
     transition: border-color var(--t-fast);
 }
 #auth-email:focus { border-color: var(--ink); }
+.auth-status { animation: slideUp var(--t-mid) var(--ease-out) both; }
+.auth-status a { color: var(--ink); }
+.account-email { font-size: 1.05rem; font-style: italic; margin-top: 0.45rem; overflow-wrap: anywhere; }
+.sync-status { margin: 0.15rem 0 0.45rem; transition: color var(--t-mid); }
 
 /* ── Main area ───────────────────────────────────────────────────────────── */
 .main {
