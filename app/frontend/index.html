@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20">
+    <link rel="stylesheet" href="style.css?v=22">
 </head>
 
 <body>
@@ -43,7 +43,9 @@
                 <button type="button" id="settings-toggle" class="sb-heading" aria-expanded="false" aria-controls="settings-panel">
                     SETTINGS <span class="sb-heading-icon">+</span>
                 </button>
-                <div id="settings-panel" class="settings" hidden>
+                <div id="settings-panel" class="collapsible">
+                <div class="collapsible-inner">
+                <div class="settings">
                     <button type="button" id="diversity-toggle" class="toggle" aria-pressed="false">
                         <span class="toggle-track"><span class="toggle-thumb"></span></span>
                         <span class="toggle-label">Boost diversity</span>
@@ -75,12 +77,25 @@
                         </div>
                     </div>
                 </div>
+                </div>
+                </div>
             </section>
 
             <section class="sb-section sb-collections">
                 <div class="sb-heading-row">
                     <span class="sb-label">COLLECTIONS</span>
                     <button type="button" id="new-collection-btn" class="link-btn">+ NEW</button>
+                </div>
+                <div id="target-card" class="target-card">
+                    <span class="target-kicker">COLLECTING INTO</span>
+                    <button type="button" id="target-open" class="target-main" title="Open this collection">
+                        <span id="target-cover" class="target-cover"></span>
+                        <span class="target-text">
+                            <span id="target-name" class="target-name"></span>
+                            <span id="target-count" class="target-count"></span>
+                        </span>
+                    </button>
+                    <button type="button" id="target-change" class="target-change" aria-haspopup="menu">CHANGE <span aria-hidden="true">▾</span></button>
                 </div>
                 <ul id="collection-list" class="collection-list"></ul>
             </section>
@@ -123,6 +138,19 @@
 
         <div id="gallery" class="masonry"></div>
         <div id="status" class="status" hidden></div>
+
+        <section id="recos" class="recos" hidden>
+            <div class="recos-head">
+                <div>
+                    <h2 class="recos-title">Suggested for this collection</h2>
+                    <p id="recos-sub" class="recos-sub"></p>
+                </div>
+                <button type="button" id="recos-more" class="pill-btn">SEE MORE</button>
+            </div>
+            <div id="recos-gallery" class="masonry"></div>
+            <div id="recos-status" class="status" hidden></div>
+        </section>
+
         <div id="sentinel" class="sentinel"></div>
     </main>
 
@@ -145,7 +173,10 @@
                 </div>
             </div>
             <div class="lb-actions">
-                <button type="button" id="lb-collect" class="lb-action">COLLECT</button>
+                <span class="lb-split">
+                    <button type="button" id="lb-collect" class="lb-action">COLLECT</button>
+                    <button type="button" id="lb-collect-menu" class="lb-action lb-chevron" aria-haspopup="menu" aria-label="Choose a collection">▾</button>
+                </span>
                 <button type="button" id="lb-visual" class="lb-action">VISUAL RESEARCH</button>
                 <a id="lb-download" class="lb-action" target="_blank" rel="noopener noreferrer" download>DOWNLOAD</a>
             </div>
@@ -153,9 +184,16 @@
         <button type="button" id="lb-close" class="lb-close" aria-label="Close"></button>
     </div>
 
-    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <div id="picker" class="picker" role="menu" hidden></div>
 
-    <script src="app.js?v=20"></script>
+    <dialog id="dialog" class="dialog"></dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite">
+        <span id="toast-text"></span>
+        <button type="button" id="toast-action" class="toast-action" hidden></button>
+    </div>
+
+    <script src="app.js?v=22"></script>
 </body>
 
 </html>
