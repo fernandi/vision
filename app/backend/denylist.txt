@@ -1,0 +1,2 @@
+# Images to exclude from every search, one faiss_id per line (text after # is ignored).
+# Candidates come from the "WTF flag" reports stored in the flags table.

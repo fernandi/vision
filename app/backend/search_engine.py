@@ -57,6 +57,14 @@ class VisualSearchEngine:
         )
         print("  ✓ faiss.index")
 
+        # SQLite metadata keeps ~0.9 GB of JSON out of memory and enables the denylist.
+        metadata_url = os.environ.get("METADATA_DB_URL")
+        if metadata_url:
+            self.db_file = os.path.join(self.data_dir, "metadata.db")
+            self._download(metadata_url, self.db_file)
+            print("  ✓ metadata.db (METADATA_DB_URL)")
+            return
+
         # Prefer SQLite db if available
         try:
             self.db_file = hf_hub_download(
@@ -71,6 +79,21 @@ class VisualSearchEngine:
                 repo_type="dataset", token=hf_token, local_dir=self.data_dir,
             )
             print("  ✓ index_mapping.json (fallback)")
+
+    @staticmethod
+    def _download(url, path):
+        """Stream url to path (skipped if a file of the same size is already there)."""
+        import shutil
+        import urllib.request
+        req = urllib.request.Request(url, headers={"User-Agent": "glane-server"})
+        with urllib.request.urlopen(req, timeout=300) as resp:
+            size = int(resp.headers.get("Content-Length") or -1)
+            if os.path.exists(path) and os.path.getsize(path) == size:
+                return
+            tmp = path + ".part"
+            with open(tmp, "wb") as f:
+                shutil.copyfileobj(resp, f, length=1 << 20)
+        os.replace(tmp, path)
 
     def _load_metadata(self):
         """Load metadata from SQLite if available, else fall back to JSON."""
@@ -199,9 +222,27 @@ class VisualSearchEngine:
                 "SELECT faiss_id FROM images WHERE ImageID LIKE 'NPM-%'"
             )
         }
-        self.denylist = dvb_ids | npm_ids
-        print(f"  ✓ denylist built: {len(dvb_ids)} DVB ceramic shards + "
-              f"{len(npm_ids)} NPM stamp sheets = {len(self.denylist)} total suppressed")
+        # Blocks of postage stamps held by other museums (e.g. the Met's "Penny Black"
+        # blocks). Matches the phrase, not the word "stamp": stamp *seals* stay.
+        postage_ids = {
+            row[0] for row in self.db_conn.execute(
+                """SELECT faiss_id FROM images WHERE ImageID NOT LIKE 'NPM-%' AND (
+                       lower(Title) LIKE '%postage stamp%' OR lower(captionEn) LIKE '%postage stamp%'
+                       OR lower(captionEn) LIKE '%plate proof%' OR lower(captionEn) LIKE '%revenue stamp%')"""
+            )
+        }
+        self.denylist = dvb_ids | npm_ids | postage_ids | set(self.extra_denylist())
+        print(f"  ✓ denylist built: {len(dvb_ids)} DVB ceramic shards + {len(npm_ids)} NPM stamp sheets + "
+              f"{len(postage_ids)} postage stamp blocks = {len(self.denylist)} total suppressed")
+
+    @staticmethod
+    def extra_denylist():
+        """Hand-picked faiss_ids (one per line, # comments) from app/backend/denylist.txt."""
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "denylist.txt")
+        if not os.path.exists(path):
+            return []
+        with open(path, encoding="utf-8") as f:
+            return [int(line.split("#")[0]) for line in f if line.split("#")[0].strip()]
 
     def _lookup_metadata(self, faiss_ids):
         """Return list of metadata dicts for given FAISS index IDs."""

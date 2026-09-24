@@ -31,8 +31,8 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 FRONTEND = os.path.join(ROOT, "app", "frontend")
-SEARCH_PREFIXES = ("/search", "/cluster-members", "/collection-zip", "/health", "/flag")
-ACCOUNT_PREFIXES = ("/auth/", "/api/")
+SEARCH_PREFIXES = ("/search", "/cluster-members", "/collection-zip", "/health")
+ACCOUNT_PREFIXES = ("/auth/", "/api/", "/flag")
 PASS_HEADERS = ("content-type", "location", "set-cookie", "cache-control", "x-missing")
 UA = {"User-Agent": "Mozilla/5.0 (Glane dev server)"}
 

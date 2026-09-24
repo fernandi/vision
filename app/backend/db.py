@@ -37,6 +37,12 @@ SCHEMA = [
         deleted INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (user_id, id)
     )""",
+    # "WTF flag" reports from visitors: candidates for app/backend/denylist.txt.
+    """CREATE TABLE IF NOT EXISTS flags (
+        faiss_id BIGINT PRIMARY KEY,
+        reports INTEGER NOT NULL,
+        last_at BIGINT NOT NULL
+    )""",
 ]
 
 

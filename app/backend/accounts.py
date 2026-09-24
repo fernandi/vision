@@ -9,6 +9,7 @@ Accounts: passwordless sign-in by email link, and collections saved per user.
   GET  /api/collections         the user's collections (+ ids deleted elsewhere)
   PUT  /api/collections/{id}    create / update, last write wins on updated_at
   DELETE /api/collections/{id}  leaves a tombstone so other devices drop it too
+  POST /flag                    {faiss_id} report an irrelevant image
 """
 import hashlib
 import hmac
@@ -317,3 +318,19 @@ def delete_collection(cid: str, request: Request, updated_at: int = 0):
                ON CONFLICT (user_id, id) DO UPDATE SET deleted = 1, items = '[]', updated_at = excluded.updated_at""",
             (uid, cid, stamp))
     return {"status": "deleted"}
+
+
+# ── Irrelevant-image reports ("WTF flag") ────────────────────────────────────
+class FlagIn(BaseModel):
+    faiss_id: int = Field(ge=0)
+
+
+@router.post("/flag")
+def flag(body: FlagIn, request: Request):
+    if not _allow(f"flag:{_client_ip(request)}", 60, 3600):
+        raise HTTPException(429, "Too many reports")
+    with db.transaction() as d:
+        d.execute("""INSERT INTO flags (faiss_id, reports, last_at) VALUES (?, 1, ?)
+                     ON CONFLICT (faiss_id) DO UPDATE SET reports = flags.reports + 1, last_at = excluded.last_at""",
+                  (body.faiss_id, _now()))
+    return {"status": "ok"}
