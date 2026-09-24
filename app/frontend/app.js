@@ -20,6 +20,7 @@ const ICON = {
     collect: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>',
     collected: '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>',
     visual: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="12" height="12" rx="1"/><circle cx="16.5" cy="16.5" r="3.6"/><line x1="19.2" y1="19.2" x2="22" y2="22"/></svg>',
+    cover: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>',
     hide: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>',
 };
 
@@ -111,18 +112,35 @@ const Collections = {
                 })),
             };
         }
-        if (!data.list.length) data.list.push(this.blank('My collection'));
-        if (!data.list.some(c => c.id === data.activeId)) data.activeId = data.list[0].id;
+        for (const c of data.list) c.createdAt ??= createdFromId(c.id);
+        if (!data.v2) {
+            // v0.2 no longer creates a default collection: drop the old empty one.
+            data.list = data.list.filter(c => !(c.name === 'My collection' && !c.items.length));
+            data.v2 = true;
+        }
+        data.list.sort((a, b) => a.createdAt - b.createdAt);
+        if (!data.list.some(c => c.id === data.activeId)) data.activeId = data.list.at(-1)?.id ?? null;
         this.data = data;
         this.save();
     },
-    blank(name) { return { id: uid(), name, items: [] }; },
     save() { store.set('glane.collections', this.data); },
     all() { return this.data.list; },
     get(id) { return this.data.list.find(c => c.id === id); },
-    active() { return this.get(this.data.activeId); },
+    active() { return this.get(this.data.activeId) || null; },
     setActive(id) { this.data.activeId = id; this.save(); },
-    contains(id, item) { const k = itemKey(item); return this.get(id).items.some(i => itemKey(i) === k); },
+    ensureTarget() {
+        if (!this.active()) this.setActive(this.create().id);
+        return this.active();
+    },
+    cover(c) {
+        return (c.coverKey && c.items.find(i => itemKey(i) === c.coverKey)) || c.items[0] || null;
+    },
+    setCover(id, item) { this.get(id).coverKey = itemKey(item); this.save(); },
+    contains(id, item) {
+        const c = this.get(id);
+        const k = itemKey(item);
+        return Boolean(c) && c.items.some(i => itemKey(i) === k);
+    },
     add(id, item) {
         if (this.contains(id, item)) return false;
         this.get(id).items.unshift({ ...item });
@@ -144,19 +162,23 @@ const Collections = {
         this.save();
     },
     create(name) {
-        const c = this.blank(name || `Collection ${this.data.list.length + 1}`);
-        this.data.list.unshift(c);
+        const c = { id: uid(), name: name || `Collection ${this.data.list.length + 1}`, items: [], createdAt: Date.now(), coverKey: null };
+        this.data.list.push(c);
         this.save();
         return c;
     },
     rename(id, name) { const c = this.get(id); if (c && name.trim()) { c.name = name.trim(); this.save(); } },
     remove(id) {
         this.data.list = this.data.list.filter(c => c.id !== id);
-        if (!this.data.list.length) this.data.list.push(this.blank('My collection'));
-        if (!this.get(this.data.activeId)) this.data.activeId = this.data.list[0].id;
+        if (!this.get(this.data.activeId)) this.data.activeId = this.data.list.at(-1)?.id ?? null;
         this.save();
     },
 };
+
+// Ids are Date.now() (legacy) or uid(): base-36 timestamp + 4 random chars.
+function createdFromId(id) {
+    return /^\d+$/.test(id) ? Number(id) : parseInt(String(id).slice(0, -4), 36) || 0;
+}
 
 // ── State ───────────────────────────────────────────────────────────────────
 const query = { text: '', refs: [], negs: [] };   // refs/negs: { key, src, id?, b64? }
@@ -317,7 +339,9 @@ function createCard(item, ratio, grid, mode, batchIndex = 0) {
         e.dataTransfer.effectAllowed = 'copy';
         e.dataTransfer.setData('application/x-glane-item', JSON.stringify(item));
         e.dataTransfer.setData('text/uri-list', item.src);
+        document.body.classList.add('is-dragging');
     });
+    img.addEventListener('dragend', () => document.body.classList.remove('is-dragging'));
     frame.appendChild(img);
     frame.addEventListener('click', () => openLightbox(grid, item));
     card.appendChild(frame);
@@ -338,6 +362,13 @@ function createCard(item, ratio, grid, mode, batchIndex = 0) {
         hideBtn.innerHTML = ICON.hide;
         hideBtn.addEventListener('click', e => { e.stopPropagation(); showHideOverlay(card, grid); });
         top.appendChild(hideBtn);
+    }
+    if (mode === 'collection') {
+        const coverBtn = el('button', 'card-icon-btn card-cover');
+        coverBtn.type = 'button';
+        coverBtn.innerHTML = ICON.cover;
+        coverBtn.addEventListener('click', e => { e.stopPropagation(); setCover(item); });
+        top.appendChild(coverBtn);
     }
 
     const bottom = el('div', 'card-bottom');
@@ -381,22 +412,41 @@ function paintCollectButton(card) {
     const btn = card.querySelector('.card-collect');
     const cid = cardCollectionId(card);
     const on = Collections.contains(cid, card._item);
-    const name = Collections.get(cid).name;
+    const target = Collections.get(cid);
     btn.classList.toggle('on', on);
     btn.innerHTML = `${on ? ICON.collected : ICON.collect}<span class="card-btn-label">${on ? 'COLLECTED' : 'COLLECT'}</span>`;
-    btn.title = on ? `In “${name}”: remove or move` : `Add to “${name}”`;
+    btn.title = on ? `In “${target.name}”: remove or move`
+        : target ? `Add to “${target.name}”` : 'Add to a new collection';
     btn.setAttribute('aria-label', btn.title);
+
+    const coverBtn = card.querySelector('.card-cover');
+    if (coverBtn) {
+        const c = Collections.get(viewingId);
+        const isCover = Boolean(c) && itemKey(Collections.cover(c) || {}) === itemKey(card._item);
+        coverBtn.classList.toggle('on', isCover);
+        coverBtn.title = isCover ? 'Collection cover' : 'Use as collection cover';
+        coverBtn.setAttribute('aria-label', coverBtn.title);
+    }
 }
 
 function repaintAll() {
     document.querySelectorAll('.card').forEach(card => { if (card.querySelector('.card-collect')) paintCollectButton(card); });
-    if (lbItem) $('lb-collect').classList.toggle('on', Collections.contains(Collections.data.activeId, lbItem));
+    if (lbItem) paintLightboxActions();
     renderSidebarCollections();
     if (view === 'collection') $('collection-count').textContent = countLabel(Collections.get(viewingId).items.length);
 }
 
+function setCover(item) {
+    const c = Collections.get(viewingId);
+    if (!c || !Collections.contains(c.id, item)) return;
+    Collections.setCover(c.id, item);
+    repaintAll();
+    bumpRow(c.id);
+    toast(`Cover of “${c.name}” updated`);
+}
+
 function onCollectClick(card) {
-    const cid = cardCollectionId(card);
+    const cid = cardCollectionId(card) ?? Collections.ensureTarget().id;
     const item = card._item;
     if (Collections.contains(cid, item)) { openItemDialog(item, cid); return; }
     collectInto(cid, item, card.querySelector('.card-img img'));
@@ -413,15 +463,28 @@ function collectInto(cid, item, fromImg) {
         label: 'UNDO',
         run: () => { Collections.removeItem(cid, item); afterRemoval(item, cid); repaintAll(); },
     });
-    if (cid === Collections.data.activeId) flyToTarget(fromImg);
+    repaintAll();
+    flyToCollection(cid, fromImg);
     if (view === 'collection' && viewingId === cid) {
         const recoCard = recosGrid.cardFor(item);
         if (recoCard) recosGrid.remove(recoCard);
         const ratio = recoCard ? parseFloat(recoCard.querySelector('.card-img').style.aspectRatio.split('/')[1]) : 1;
         mainGrid.add(createCard(item, clampRatio(ratio), mainGrid, 'collection'), clampRatio(ratio), item);
         setStatus(statusEl, '');
+        repaintAll();
     }
-    repaintAll();
+}
+
+function rowFor(cid) {
+    return document.querySelector(`.collection-row[data-id="${CSS.escape(cid)}"]`);
+}
+
+function bumpRow(cid) {
+    const row = rowFor(cid);
+    if (!row) return;
+    row.classList.remove('bump');
+    void row.offsetWidth;
+    row.classList.add('bump');
 }
 
 // Keeps the grid of the collection being viewed in sync after a removal.
@@ -433,16 +496,11 @@ function afterRemoval(item, cid) {
     }
 }
 
-function flyToTarget(fromImg) {
-    const dest = $('target-cover');
-    const bumpTarget = () => {
-        const card = $('target-card');
-        card.classList.remove('bump');
-        void card.offsetWidth;
-        card.classList.add('bump');
-    };
-    const b = dest.getBoundingClientRect();
-    if (!fromImg || reduceMotion.matches || b.height === 0 || b.bottom < 0 || b.top > window.innerHeight) {
+function flyToCollection(cid, fromImg) {
+    const dest = rowFor(cid)?.querySelector('.collection-cover');
+    const bumpTarget = () => bumpRow(cid);
+    const b = dest?.getBoundingClientRect();
+    if (!b || !fromImg || reduceMotion.matches || b.height === 0 || b.bottom < 0 || b.top > window.innerHeight) {
         bumpTarget();
         return;
     }
@@ -587,11 +645,6 @@ window.addEventListener('scroll', () => closePicker(), { passive: true });
 function setTarget(id, announce) {
     if (Collections.data.activeId === id) return;
     Collections.setActive(id);
-    renderSidebarCollections();
-    const card = $('target-card');
-    card.classList.remove('bump');
-    void card.offsetWidth;
-    card.classList.add('bump');
     if (announce) toast(`New images now go into “${Collections.get(id).name}”`);
     repaintAll();
 }
@@ -948,52 +1001,88 @@ function undoClear() {
     renderChips();
 }
 
-// ── Sidebar: target collection + other collections ─────────────────────────
-let lastTargetCount = null;
+// ── Sidebar collections ─────────────────────────────────────────────────────
+// Rows stay in creation order and are updated in place (not rebuilt), so the
+// target row can grow with a CSS transition instead of jumping to the top.
+const DRAG_TYPE = 'application/x-glane-item';
 
-function renderSidebarCollections() {
-    const target = Collections.active();
-    $('target-name').textContent = target.name;
-    const countEl = $('target-count');
-    countEl.textContent = countLabel(target.items.length);
-    if (lastTargetCount !== null && lastTargetCount !== target.items.length) {
-        countEl.classList.remove('bump');
-        void countEl.offsetWidth;
-        countEl.classList.add('bump');
-    }
-    lastTargetCount = target.items.length;
-
-    const cover = $('target-cover');
-    const covers = target.items.slice(0, 4);
-    cover.classList.toggle('single', covers.length === 1);
-    const key = covers.map(itemKey).join('|');
-    if (cover.dataset.key !== key) {
-        cover.dataset.key = key;
-        cover.replaceChildren(...covers.map(it => {
-            const s = el('span');
-            s.style.backgroundImage = cssUrl(it.src);
-            return s;
-        }));
-    }
-
-    const list = $('collection-list');
-    list.replaceChildren();
-    Collections.all().filter(c => c.id !== target.id).forEach((c, i) => {
-        const li = el('li');
-        li.style.setProperty('--i', i);
-        const btn = el('button', 'collection-item');
-        btn.type = 'button';
-        btn.title = `Open “${c.name}”`;
-        const cv = el('span', 'collection-cover');
-        if (c.items[0]) cv.style.backgroundImage = cssUrl(c.items[0].src);
-        const text = el('span', 'collection-text');
-        text.append(el('span', 'collection-title', c.name), el('span', 'collection-meta', countLabel(c.items.length)));
-        btn.append(cv, text);
-        btn.addEventListener('click', () => openCollection(c.id));
-        li.appendChild(btn);
-        list.appendChild(li);
+function acceptsItemDrop(node, onDrop) {
+    node.addEventListener('dragover', e => {
+        if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        node.classList.add('drop-hover');
+    });
+    node.addEventListener('dragleave', e => {
+        if (!node.contains(e.relatedTarget)) node.classList.remove('drop-hover');
+    });
+    node.addEventListener('drop', e => {
+        const raw = e.dataTransfer.getData(DRAG_TYPE);
+        node.classList.remove('drop-hover');
+        document.body.classList.remove('is-dragging');
+        if (!raw) return;
+        e.preventDefault();
+        onDrop(JSON.parse(raw));
     });
 }
+
+function dropIntoCollection(cid, item) {
+    const c = Collections.get(cid);
+    if (Collections.contains(cid, item)) { toast(`Already in “${c.name}”`); bumpRow(cid); return; }
+    collectInto(cid, item, null);
+}
+
+function buildCollectionRow(c) {
+    const li = el('li', 'collection-row');
+    li.dataset.id = c.id;
+    const btn = el('button', 'collection-item');
+    btn.type = 'button';
+    const cover = el('span', 'collection-cover');
+    const text = el('span', 'collection-text');
+    text.append(
+        el('span', 'collection-kicker', 'COLLECTING INTO'),
+        el('span', 'collection-title'),
+        el('span', 'collection-meta'),
+    );
+    btn.append(cover, text);
+    btn.addEventListener('click', () => openCollection(c.id));
+    li.appendChild(btn);
+    acceptsItemDrop(li, item => dropIntoCollection(c.id, item));
+    return li;
+}
+
+function renderSidebarCollections() {
+    const list = $('collection-list');
+    const existing = new Map([...list.querySelectorAll('.collection-row')].map(li => [li.dataset.id, li]));
+    list.querySelector('.collection-empty')?.remove();
+
+    Collections.all().forEach((c, i) => {
+        let li = existing.get(c.id);
+        if (li) existing.delete(c.id);
+        else { li = buildCollectionRow(c); li.style.setProperty('--i', i); }
+        if (list.children[i] !== li) list.insertBefore(li, list.children[i] || null);
+
+        const isTarget = c.id === Collections.data.activeId;
+        li.classList.toggle('is-target', isTarget);
+        li.classList.toggle('is-viewing', view === 'collection' && c.id === viewingId);
+        li.querySelector('.collection-title').textContent = c.name;
+        li.querySelector('.collection-meta').textContent = countLabel(c.items.length);
+        li.querySelector('.collection-item').title = isTarget ? `Open “${c.name}”` : `Open “${c.name}” and collect into it`;
+        const cover = Collections.cover(c);
+        li.querySelector('.collection-cover').style.backgroundImage = cover ? cssUrl(cover.src) : '';
+    });
+    existing.forEach(li => li.remove());
+
+    if (!Collections.all().length) {
+        list.appendChild(el('li', 'collection-empty', 'No collection yet. Collect an image, or drag it here.'));
+    }
+}
+
+acceptsItemDrop($('new-collection-btn'), item => {
+    const c = Collections.create();
+    setTarget(c.id, false);
+    collectInto(c.id, item, null);
+});
 
 // ── Collection view + automatic suggestions ────────────────────────────────
 function openCollection(id) {
@@ -1077,8 +1166,38 @@ $('new-collection-btn').addEventListener('click', () => {
     name.select();
 });
 
-$('target-open').addEventListener('click', () => openCollection(Collections.data.activeId));
-$('target-change').addEventListener('click', e => { e.stopPropagation(); openPicker(e.currentTarget, null); });
+$('collection-zip-btn').addEventListener('click', async e => {
+    const btn = e.currentTarget;
+    const c = Collections.get(viewingId);
+    const ids = c.items.filter(i => i.id != null).map(i => i.id);
+    if (!ids.length) { toast('No image to download'); return; }
+    btn.disabled = true;
+    btn.textContent = 'PREPARING ZIP…';
+    try {
+        const resp = await fetch(`${API}/collection-zip`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: c.name, faiss_ids: ids }),
+        });
+        if (!resp.ok) throw new Error(`Zip failed (${resp.status})`);
+        const missing = Number(resp.headers.get('X-Missing') || 0);
+        const url = URL.createObjectURL(await resp.blob());
+        const a = el('a');
+        a.href = url;
+        a.download = `${c.name.replace(/[<>:"/\\|?*]+/g, ' ').trim() || 'collection'}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 30000);
+        toast(missing ? `Zip ready. ${missing} image${missing > 1 ? 's' : ''} could not be downloaded.` : 'Zip ready');
+    } catch (err) {
+        console.error(err);
+        toast('The zip could not be prepared. Please try again.');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'DOWNLOAD ZIP';
+    }
+});
 
 $('collection-name').addEventListener('change', e => {
     Collections.rename(viewingId, e.target.value);
@@ -1139,6 +1258,23 @@ function closeLightbox() {
     }, reduceMotion.matches ? 0 : 300);
 }
 
+function paintLightboxActions() {
+    const target = Collections.active();
+    const collect = $('lb-collect');
+    collect.classList.toggle('on', Boolean(target) && Collections.contains(target.id, lbItem));
+    collect.title = target ? `Collect into “${target.name}”` : 'Collect into a new collection';
+
+    // Choosing a cover only makes sense while browsing a collection.
+    const coverBtn = $('lb-cover');
+    const c = view === 'collection' && lbGrid === mainGrid ? Collections.get(viewingId) : null;
+    coverBtn.hidden = !c || !Collections.contains(c.id, lbItem);
+    if (!coverBtn.hidden) {
+        const isCover = itemKey(Collections.cover(c) || {}) === itemKey(lbItem);
+        coverBtn.classList.toggle('on', isCover);
+        coverBtn.textContent = isCover ? 'COVER' : 'SET AS COVER';
+    }
+}
+
 function showInLightbox(item, withSimilar, direction) {
     lbItem = item;
     lbImg.getAnimations().forEach(a => a.cancel());
@@ -1163,8 +1299,7 @@ function showInLightbox(item, withSimilar, direction) {
     if (item.url) museum.href = item.url; else museum.removeAttribute('href');
     museum.title = item.url ? 'See this artwork on the museum website' : '';
     $('lb-download').href = item.src;
-    $('lb-collect').classList.toggle('on', Collections.contains(Collections.data.activeId, item));
-    $('lb-collect').title = `Collect into “${Collections.active().name}”`;
+    paintLightboxActions();
     $('lb-prev').disabled = lbIndex <= 0;
     $('lb-next').disabled = lbIndex >= lbGrid.items.length - 1;
     if (withSimilar) loadSimilar(item);
@@ -1218,10 +1353,11 @@ $('lb-prev').addEventListener('click', () => stepLightbox(-1));
 $('lb-next').addEventListener('click', () => stepLightbox(1));
 $('lb-collect').addEventListener('click', () => {
     if (!lbItem) return;
-    const cid = Collections.data.activeId;
+    const cid = Collections.ensureTarget().id;
     if (Collections.contains(cid, lbItem)) openItemDialog(lbItem, cid);
     else collectInto(cid, lbItem, null);
 });
+$('lb-cover').addEventListener('click', () => { if (lbItem) setCover(lbItem); });
 $('lb-collect-menu').addEventListener('click', e => { e.stopPropagation(); if (lbItem) openPicker(e.currentTarget, lbItem, null); });
 $('lb-visual').addEventListener('click', () => {
     if (!lbItem) return;

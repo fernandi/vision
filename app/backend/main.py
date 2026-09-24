@@ -13,6 +13,11 @@ import numpy as np
 import torch
 from PIL import Image
 
+from urllib.parse import quote
+
+from fastapi import Response
+
+from app.backend import zip_export
 from app.backend.search_engine import VisualSearchEngine
 from app.backend.auth import router as auth_router
 
@@ -170,6 +175,27 @@ def search(req: SearchRequest):
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class ZipRequest(BaseModel):
+    name: str = "collection"
+    faiss_ids: List[int]
+
+
+@app.post("/collection-zip")
+def collection_zip(req: ZipRequest):
+    """Zip a collection's images. URLs come from the index, never from the client."""
+    ensure_loaded()
+    items = search_engine.get_items_by_ids(req.faiss_ids[:zip_export.MAX_ITEMS])
+    for item in items:
+        item["image_url"] = get_image_url(item)
+    data, missing = zip_export.build_zip(items)
+    filename = f"{zip_export.safe_name(req.name)}.zip"
+    return Response(data, media_type="application/zip", headers={
+        "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
+        "X-Missing": str(missing),
+        "Access-Control-Expose-Headers": "X-Missing",
+    })
 
 
 class ClusterRequest(BaseModel):

@@ -6,10 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Glane — Visual search in public-domain art</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Ctext x='16' y='23' font-family='Arial' font-weight='700' font-size='20' fill='%23fff' text-anchor='middle'%3EG%3C/text%3E%3C/svg%3E">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=22">
+    <link rel="preload" href="fonts/JunicodeVF-Roman.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/JunicodeVF-Italic.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="style.css?v=23">
 </head>
 
 <body>
@@ -86,18 +85,8 @@
                     <span class="sb-label">COLLECTIONS</span>
                     <button type="button" id="new-collection-btn" class="link-btn">+ NEW</button>
                 </div>
-                <div id="target-card" class="target-card">
-                    <span class="target-kicker">COLLECTING INTO</span>
-                    <button type="button" id="target-open" class="target-main" title="Open this collection">
-                        <span id="target-cover" class="target-cover"></span>
-                        <span class="target-text">
-                            <span id="target-name" class="target-name"></span>
-                            <span id="target-count" class="target-count"></span>
-                        </span>
-                    </button>
-                    <button type="button" id="target-change" class="target-change" aria-haspopup="menu">CHANGE <span aria-hidden="true">▾</span></button>
-                </div>
                 <ul id="collection-list" class="collection-list"></ul>
+                <p class="sb-note sb-drag-hint">Drag an image onto a collection to add it.</p>
             </section>
 
             <section class="sb-section sb-account">
@@ -119,12 +108,13 @@
             <span id="collection-count" class="view-count"></span>
             <div class="view-actions">
                 <button type="button" id="collection-search-btn" class="pill-btn">VISUAL RESEARCH</button>
+                <button type="button" id="collection-zip-btn" class="link-btn">DOWNLOAD ZIP</button>
                 <button type="button" id="collection-delete-btn" class="link-btn">DELETE</button>
             </div>
         </div>
 
         <section id="empty-state" class="empty-state">
-            <h1>Search 408,000 public-domain artworks.</h1>
+            <h1>Search <em>408,000</em> <span class="nowrap">public-domain</span> artworks.</h1>
             <p>From The Met, the Cleveland Museum of Art, the Art Institute of Chicago and the Smithsonian.
                 Describe what you are looking for, or drop an image in the search bar.</p>
             <div class="suggestions">
@@ -178,6 +168,7 @@
                     <button type="button" id="lb-collect-menu" class="lb-action lb-chevron" aria-haspopup="menu" aria-label="Choose a collection">▾</button>
                 </span>
                 <button type="button" id="lb-visual" class="lb-action">VISUAL RESEARCH</button>
+                <button type="button" id="lb-cover" class="lb-action" hidden>SET AS COVER</button>
                 <a id="lb-download" class="lb-action" target="_blank" rel="noopener noreferrer" download>DOWNLOAD</a>
             </div>
         </div>
@@ -193,7 +184,7 @@
         <button type="button" id="toast-action" class="toast-action" hidden></button>
     </div>
 
-    <script src="app.js?v=22"></script>
+    <script src="app.js?v=23"></script>
 </body>
 
 </html>
