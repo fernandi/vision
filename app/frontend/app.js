@@ -57,7 +57,9 @@ function toItem(r) {
     const id = r.faiss_id ?? r.id;
     return {
         id: id != null && id !== '' ? Number(id) : null,
-        src: r.image_url || '',
+        src: r.thumb_url || r.image_url || '',   // grid
+        hd: r.image_url || '',                    // full page
+        orig: r.original_url || '',               // museum file, used if a copy is missing
         url: r.URL || '',
         title: r.Title || 'Untitled',
         author: r.Author && r.Author !== 'N/A' ? r.Author : '',
@@ -308,7 +310,7 @@ window.addEventListener('resize', () => {
     resizeTimer = setTimeout(() => { mainGrid.refit(); recosGrid.refit(); }, 120);
 });
 
-function preload(src) {
+function preloadOne(src) {
     return new Promise(resolve => {
         const img = new Image();
         let settled = false;
@@ -320,9 +322,20 @@ function preload(src) {
     });
 }
 
+// Mirrored thumbnail first; if it is missing, the museum's own file.
+async function preload(item) {
+    const r = await preloadOne(item.src);
+    if (r.ok || !item.orig || item.orig === item.src) return r;
+    const fallback = await preloadOne(item.orig);
+    if (fallback.ok) item.src = item.orig;
+    return fallback;
+}
+
+const fullImage = item => item.hd || item.src;
+
 // Images that can't load are dropped instead of leaving an empty cell.
 async function fillGrid(grid, list, gen, mode, onPlaced) {
-    const loads = list.map(it => preload(it.src));
+    const loads = list.map(it => preload(it));
     let batchIndex = 0;
     for (let i = 0; i < list.length; i++) {
         const r = await loads[i];
@@ -353,7 +366,10 @@ function createCard(item, ratio, grid, mode, batchIndex = 0) {
     img.src = item.src;
     img.alt = item.title;
     img.draggable = true;
-    img.addEventListener('error', () => grid.remove(card, false));
+    img.addEventListener('error', () => {
+        if (item.orig && img.src !== new URL(item.orig, location.href).href) img.src = item.orig;
+        else grid.remove(card, false);
+    });
     img.addEventListener('dragstart', e => {
         e.dataTransfer.effectAllowed = 'copy';
         e.dataTransfer.setData('application/x-glane-item', JSON.stringify(item));
@@ -1309,15 +1325,19 @@ function showInLightbox(item, withSimilar, direction) {
             lbImg.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, easing: 'ease' });
         }
     };
-    lbImg.src = item.src;
+    const candidates = [...new Set([fullImage(item), item.orig, item.src].filter(Boolean))];
+    let attempt = 0;
+    lbImg.onerror = () => { if (++attempt < candidates.length) lbImg.src = candidates[attempt]; };
+    lbImg.src = candidates[0];
     lbImg.alt = item.title;
     $('lb-title').textContent = item.title;
     $('lb-author').textContent = item.author;
+    $('lb-author').hidden = !item.author;
     const museum = $('lb-museum');
     museum.textContent = museumName(item.source);
     if (item.url) museum.href = item.url; else museum.removeAttribute('href');
     museum.title = item.url ? 'See this artwork on the museum website' : '';
-    $('lb-download').href = item.src;
+    $('lb-download').href = fullImage(item);
     paintLightboxActions();
     $('lb-prev').disabled = lbIndex <= 0;
     $('lb-next').disabled = lbIndex >= lbGrid.items.length - 1;

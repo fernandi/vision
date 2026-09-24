@@ -60,15 +60,18 @@ def file_name(index: int, width: int, item: dict, ext: str) -> str:
 
 
 def build_zip(items: list, fetcher=fetch):
-    """items: metadata dicts with image_url, Title, Author, source, URL.
+    """items: metadata dicts with image_url (+ original_url fallback), Title, Author, source, URL.
     Returns (zip bytes, number of images that could not be fetched)."""
     items = items[:MAX_ITEMS]
 
     def grab(item):
-        try:
-            return fetcher(item["image_url"])
-        except Exception:
-            return None
+        # Mirrored HD copy first, then the museum's own file.
+        for url in dict.fromkeys(u for u in (item.get("image_url"), item.get("original_url")) if u):
+            try:
+                return url, *fetcher(url)
+            except Exception:
+                continue
+        return None
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         downloads = list(pool.map(grab, items))
@@ -85,8 +88,8 @@ def build_zip(items: list, fetcher=fetch):
             museum = MUSEUMS.get(item.get("source", ""), item.get("source", ""))
             name = ""
             if got:
-                data, ctype = got
-                name = file_name(i, width, item, _extension(ctype, item["image_url"]))
+                url, data, ctype = got
+                name = file_name(i, width, item, _extension(ctype, url))
                 if name in used:
                     name = name.replace(" (", f" [{i}] (", 1)
                 used.add(name)
@@ -94,7 +97,7 @@ def build_zip(items: list, fetcher=fetch):
             else:
                 missing += 1
             writer.writerow([name or "(unavailable)", item.get("Title", ""), item.get("Author", ""),
-                             museum, item.get("URL", ""), item.get("image_url", ""),
+                             museum, item.get("URL", ""), item.get("original_url") or item.get("image_url", ""),
                              item.get("License", "") or "Public domain / CC0"])
         zf.writestr("credits.csv", "﻿" + credits.getvalue())
     return buf.getvalue(), missing

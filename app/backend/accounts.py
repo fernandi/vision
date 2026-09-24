@@ -239,14 +239,16 @@ if ENV != "production":
 # ── Collections ──────────────────────────────────────────────────────────────
 class ItemIn(BaseModel):
     id: Optional[int] = None
-    src: str = Field(max_length=2048)
-    url: str = Field(default="", max_length=2048)
+    src: str = Field(max_length=2048)                 # grid thumbnail
+    hd: str = Field(default="", max_length=2048)      # full-page image
+    orig: str = Field(default="", max_length=2048)    # museum file, fallback
+    url: str = Field(default="", max_length=2048)     # museum page
     title: str = Field(default="", max_length=500)
     author: str = Field(default="", max_length=300)
     source: str = Field(default="", max_length=40)
     members: Optional[List[int]] = Field(default=None, max_length=100)
 
-    @field_validator("src", "url")
+    @field_validator("src", "hd", "orig", "url")
     @classmethod
     def _http_only(cls, v):
         if v and not v.startswith(("https://", "http://")):

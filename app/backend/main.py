@@ -71,15 +71,23 @@ def ensure_loaded():
             raise
 
 
-def get_image_url(item: dict) -> str:
-    """Return the direct image URL from metadata (already stored during indexing)."""
+IMAGE_BASE_URL = os.environ.get("IMAGE_BASE_URL", "").rstrip("/")
+
+
+def add_image_urls(item: dict) -> None:
+    """thumb_url for the grid, image_url for the full page, original_url as a fallback.
+    With IMAGE_BASE_URL set, both come from the mirror built by scripts/mirror_images.py."""
     if ENV == "production":
-        # ImageURL is the original museum URL (IIIF/CDN), stored in index_mapping.json
-        image_url = item.get("ImageURL")
-        if image_url:
-            return image_url
-    # Local: served via FastAPI static mount
-    return f"/images/{item.get('filename', '')}"
+        original = item.get("ImageURL") or ""
+    else:
+        original = f"/images/{item.get('filename', '')}"   # local: served via FastAPI static mount
+    fid = item.get("faiss_id")
+    if IMAGE_BASE_URL and fid is not None:
+        item["thumb_url"] = f"{IMAGE_BASE_URL}/t/{int(fid)}.webp"
+        item["image_url"] = f"{IMAGE_BASE_URL}/h/{int(fid)}.webp"
+    else:
+        item["thumb_url"] = item["image_url"] = original
+    item["original_url"] = original
 
 
 def _encode_b64_image(b64: str) -> np.ndarray:
@@ -173,7 +181,7 @@ def search(req: SearchRequest):
         mode = f"text+{n_imgs}img" if n_imgs else "text"
         print(f"[search/{mode}] '{req.query}' offset={req.offset} → {len(data['results'])} results in {elapsed:.3f}s")
         for item in data["results"]:
-            item["image_url"] = get_image_url(item)
+            add_image_urls(item)
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -190,7 +198,7 @@ def collection_zip(req: ZipRequest):
     ensure_loaded()
     items = search_engine.get_items_by_ids(req.faiss_ids[:zip_export.MAX_ITEMS])
     for item in items:
-        item["image_url"] = get_image_url(item)
+        add_image_urls(item)
     data, missing = zip_export.build_zip(items)
     filename = f"{zip_export.safe_name(req.name)}.zip"
     return Response(data, media_type="application/zip", headers={
@@ -209,7 +217,7 @@ def cluster_members(req: ClusterRequest):
         ensure_loaded()
         items = search_engine.get_items_by_ids(req.faiss_ids)
         for item in items:
-            item["image_url"] = get_image_url(item)
+            add_image_urls(item)
         return {"results": items}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

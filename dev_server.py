@@ -14,6 +14,9 @@ features are emulated on top of it: `reference_ids` / `negative_ids` become
 uploaded images (fetched here, where museum CDNs don't enforce CORS), and
 POST /collection-zip is built here with the backend's own code.
 With --native, everything (accounts included) goes to --api untouched.
+
+--mirror PATH serves images produced by scripts/mirror_images.py (dir: output)
+and points search results at them, as IMAGE_BASE_URL does on the server.
 """
 import argparse
 import base64
@@ -49,12 +52,17 @@ def _post_json(url, payload):
         return json.load(r)
 
 
-def _ids_to_base64(api, ids):
+def _ids_to_base64(api, ids, mirror_dir=None):
     if not ids:
         return []
     items = _post_json(f"{api}/cluster-members", {"faiss_ids": ids})["results"]
     out = []
     for it in items:
+        local = mirror_dir and os.path.join(mirror_dir, "h", f"{int(it['faiss_id'])}.webp")
+        if local and os.path.isfile(local):
+            with open(local, "rb") as f:
+                out.append(base64.b64encode(f.read()).decode())
+            continue
         try:
             with urllib.request.urlopen(urllib.request.Request(it["image_url"], headers=UA), timeout=60) as r:
                 out.append(base64.b64encode(r.read()).decode())
@@ -82,6 +90,8 @@ class Handler(SimpleHTTPRequestHandler):
     api = ""
     accounts_api = ""
     native = False
+    mirror_dir = None
+    base = ""
 
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=FRONTEND, **kw)
@@ -104,7 +114,26 @@ class Handler(SimpleHTTPRequestHandler):
     def _body(self):
         return self.rfile.read(int(self.headers.get("Content-Length") or 0))
 
+    def _with_mirror(self, items):
+        for it in items:
+            if self.mirror_dir and "thumb_url" not in it and it.get("faiss_id") is not None:
+                fid = int(it["faiss_id"])
+                it["original_url"] = it.get("image_url", "")
+                it["thumb_url"] = f"{self.base}/mirror/t/{fid}.webp"
+                it["image_url"] = f"{self.base}/mirror/h/{fid}.webp"
+        return items
+
+    def _serve_mirror(self):
+        rel = urllib.parse.unquote(self.path.split("?", 1)[0][len("/mirror/"):])
+        path = os.path.realpath(os.path.join(self.mirror_dir, *rel.split("/")))
+        if not path.startswith(os.path.realpath(self.mirror_dir) + os.sep) or not os.path.isfile(path):
+            return self._reply(404, b"", [("Content-Type", "text/plain")])
+        with open(path, "rb") as f:
+            self._reply(200, f.read(), [("Content-Type", "image/webp")])
+
     def do_GET(self):
+        if self.mirror_dir and self.path.startswith("/mirror/"):
+            return self._serve_mirror()
         upstream = self._upstream()
         if upstream:
             return self._forward("GET", None, upstream)
@@ -119,9 +148,9 @@ class Handler(SimpleHTTPRequestHandler):
             ref_ids = payload.pop("reference_ids", None)
             neg_ids = payload.pop("negative_ids", None)
             if ref_ids:
-                payload["reference_images"] = (payload.get("reference_images") or []) + _ids_to_base64(self.api, ref_ids)
+                payload["reference_images"] = (payload.get("reference_images") or []) + _ids_to_base64(self.api, ref_ids, self.mirror_dir)
             if neg_ids:
-                payload["negative_images"] = (payload.get("negative_images") or []) + _ids_to_base64(self.api, neg_ids)
+                payload["negative_images"] = (payload.get("negative_images") or []) + _ids_to_base64(self.api, neg_ids, self.mirror_dir)
             body = json.dumps(payload).encode()
         return self._forward("POST", body, self._upstream() or self.api)
 
@@ -134,7 +163,7 @@ class Handler(SimpleHTTPRequestHandler):
     def _collection_zip(self, payload):
         from app.backend import zip_export
         ids = payload.get("faiss_ids", [])[:zip_export.MAX_ITEMS]
-        items = _post_json(f"{self.api}/cluster-members", {"faiss_ids": ids})["results"] if ids else []
+        items = self._with_mirror(_post_json(f"{self.api}/cluster-members", {"faiss_ids": ids})["results"]) if ids else []
         data, missing = zip_export.build_zip(items)
         name = urllib.parse.quote(f"{zip_export.safe_name(payload.get('name', ''))}.zip")
         self._reply(200, data, [("Content-Type", "application/zip"),
@@ -165,6 +194,10 @@ class Handler(SimpleHTTPRequestHandler):
             data = resp.read()
             passed = [(k, v) for k, v in resp.headers.items() if k.lower() in PASS_HEADERS]
             status = resp.code
+        if self.mirror_dir and not self.native and status == 200 and self.path in ("/search", "/cluster-members"):
+            payload = json.loads(data)
+            self._with_mirror(payload.get("results", []))
+            data = json.dumps(payload).encode()
         self._reply(status, data, passed)
 
 
@@ -173,6 +206,7 @@ def main():
     p.add_argument("--api", default="https://glane.heretique.fr", help="backend for search and images")
     p.add_argument("--port", type=int, default=5173)
     p.add_argument("--accounts-port", type=int, default=5174)
+    p.add_argument("--mirror", help="folder written by scripts/mirror_images.py --out dir:…")
     p.add_argument("--native", action="store_true",
                    help="--api already runs v0.2: forward everything to it, accounts included")
     args = p.parse_args()
@@ -180,6 +214,8 @@ def main():
     mimetypes.add_type("font/woff2", ".woff2")
     Handler.api = args.api.rstrip("/")
     Handler.native = args.native
+    Handler.mirror_dir = os.path.abspath(args.mirror) if args.mirror else None
+    Handler.base = f"http://localhost:{args.port}"
     if args.native:
         Handler.accounts_api = Handler.api
     else:
@@ -188,6 +224,8 @@ def main():
     print(f"Glane dev: http://localhost:{args.port}   (search: {Handler.api}, accounts: {Handler.accounts_api})", flush=True)
     if not args.native:
         print(f"Sign-in emails (dev): http://localhost:{args.port}/auth/dev-outbox", flush=True)
+    if Handler.mirror_dir:
+        print(f"Images from the local mirror: {Handler.mirror_dir}", flush=True)
     ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
 
 
