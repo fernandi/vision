@@ -3,236 +3,159 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <title>Visual Search</title>
-    <link rel="stylesheet" href="style.css?v=14">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Glane — Visual search in public-domain art</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Ctext x='16' y='23' font-family='Arial' font-weight='700' font-size='20' fill='%23fff' text-anchor='middle'%3EG%3C/text%3E%3C/svg%3E">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=20">
 </head>
 
 <body>
-    <!-- Pinbar: fixed black strip above header -->
-    <div id="saved-panel">
-        <!-- Compact bar (always shown when has-saved) -->
-        <div id="pinbar-bar">
-            <div id="saved-thumbs"></div>
-            <div class="pinbar-actions" id="pinbar-actions">
-                <button id="pinbar-use-search-btn" title="Use all pinned images for search">USE FOR SEARCH</button>
-                <button id="pinbar-new-btn" title="New board">NEW</button>
-                <button id="pinbar-expand-btn" title="Expand / Collapse boards">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="7 9 12 4 17 9"/><polyline points="17 15 12 20 7 15"/>
-                    </svg>
-                </button>
-            </div>
-        </div>
-        <!-- Expanded boards view -->
-        <div id="pinbar-expanded-view">
-            <div id="pinbar-boards-list"></div>
-            <!-- Auth area -->
-            <div id="pinbar-auth-area">
-                <div id="pinbar-auth-form">
-                    <span class="pinbar-auth-hint">Sign in to sync your boards</span>
-                    <input type="email" id="pinbar-email-input" placeholder="your@email.com">
-                    <button id="pinbar-magic-btn">SEND LINK</button>
-                </div>
-                <div id="pinbar-auth-status" hidden></div>
-            </div>
-        </div>
-    </div>
-
-    <header>
-        <div class="search-container" id="search-container">
-            <!-- Image chips: populated dynamically when images are dropped -->
-            <div id="image-chips-container" class="image-chips-container"></div>
-            <input type="text" id="search-input" placeholder="FISHING BY NIGHT" autofocus>
-            <!-- Clear-all button: just left of the search loupe -->
-            <div id="search-clear-area">
-                <button id="undo-clear-btn" title="Annuler" aria-label="Annuler" style="display:none">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/>
-                    </svg>
-                </button>
-                <button id="clear-all-btn" title="Tout effacer" aria-label="Tout effacer">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                    </svg>
-                </button>
-            </div>
-            <button id="search-btn" aria-label="Search">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="11" cy="11" r="8"></circle>
-                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                </svg>
+    <aside id="sidebar" class="sidebar">
+        <div class="sb-top">
+            <a class="brand" href="./">GLANE</a>
+            <button id="menu-btn" class="menu-btn" type="button" aria-label="Menu" aria-expanded="false">
+                <span></span><span></span>
             </button>
         </div>
 
-        <!-- Filter panel: drops from top-right -->
-        <div id="filter-panel" class="filter-panel" aria-hidden="true">
-            <!-- Diversity toggle -->
-            <button id="diversity-toggle" class="diversity-toggle" aria-pressed="false" title="Toggle diversity (MMR)">
-                <span class="toggle-track">
-                    <span class="toggle-thumb"></span>
-                </span>
-                <span class="toggle-label">BOOST DIVERSITY</span>
-            </button>
-
-            <div class="filter-panel-separator"></div>
-
-            <!-- Combination mode -->
-            <div class="filter-section-label">COMBINATION MODE</div>
-            <div class="mode-radio-group" id="combination-mode-group">
-
-                <label class="mode-radio">
-                    <input type="radio" name="combination-mode" value="centroid" id="mode-centroid">
-                    <span class="mode-radio-content">
-                        <span class="mode-symbol">ø</span>
-                        <span class="mode-info">
-                            <span class="mode-name">Barycentre</span>
-                            <span class="mode-desc">Vibe général de tous les éléments</span>
-                        </span>
-                    </span>
-                </label>
-
-                <label class="mode-radio">
-                    <input type="radio" name="combination-mode" value="intersection" id="mode-intersection">
-                    <span class="mode-radio-content">
-                        <span class="mode-symbol">∩</span>
-                        <span class="mode-info">
-                            <span class="mode-name">Intersection</span>
-                            <span class="mode-desc">Points communs à tous (∩)</span>
-                        </span>
-                    </span>
-                </label>
-
-                <label class="mode-radio">
-                    <input type="radio" name="combination-mode" value="union" id="mode-union">
-                    <span class="mode-radio-content">
-                        <span class="mode-symbol">∪</span>
-                        <span class="mode-info">
-                            <span class="mode-name">Union</span>
-                            <span class="mode-desc">Ressemble à l’un d’eux (∪)</span>
-                        </span>
-                    </span>
-                </label>
-
-                <label class="mode-radio">
-                    <input type="radio" name="combination-mode" value="pca" id="mode-pca">
-                    <span class="mode-radio-content">
-                        <span class="mode-symbol">≡</span>
-                        <span class="mode-info">
-                            <span class="mode-name">Composante commune</span>
-                            <span class="mode-desc">Axe partagé entre les éléments (ACP)</span>
-                        </span>
-                    </span>
-                </label>
-
-                <label class="mode-radio">
-                    <input type="radio" name="combination-mode" value="purified" id="mode-purified" checked>
-                    <span class="mode-radio-content">
-                        <span class="mode-symbol">◎</span>
-                        <span class="mode-info">
-                            <span class="mode-name">Spécificité</span>
-                            <span class="mode-desc">Ce qui est unique à la requête</span>
-                        </span>
-                    </span>
-                </label>
-
-            </div>
-
-            <div id="negative-mode-section" hidden>
-                <div class="filter-panel-separator"></div>
-                <div class="filter-section-label">NEGATIVE MODE</div>
-                <div class="mode-radio-group" id="negative-mode-group">
-                    <label class="mode-radio">
-                        <input type="radio" name="negative-mode" value="directed" id="neg-directed" checked>
-                        <span class="mode-radio-content">
-                            <span class="mode-symbol">⊖</span>
-                            <span class="mode-info">
-                                <span class="mode-name">Soustraction dirigée</span>
-                                <span class="mode-desc">Retire ce qui distingue le négatif</span>
-                            </span>
-                        </span>
-                    </label>
-                    <label class="mode-radio">
-                        <input type="radio" name="negative-mode" value="orthogonal" id="neg-orthogonal">
-                        <span class="mode-radio-content">
-                            <span class="mode-symbol">⊥</span>
-                            <span class="mode-info">
-                                <span class="mode-name">Projection orthogonale</span>
-                                <span class="mode-desc">Efface la composante négative</span>
-                            </span>
-                        </span>
-                    </label>
-                    <label class="mode-radio">
-                        <input type="radio" name="negative-mode" value="penalty" id="neg-penalty">
-                        <span class="mode-radio-content">
-                            <span class="mode-symbol">↓</span>
-                            <span class="mode-info">
-                                <span class="mode-name">Pénalité de score</span>
-                                <span class="mode-desc">Pénalise ce qui ressemble au négatif</span>
-                            </span>
-                        </span>
-                    </label>
+        <form id="search-form" class="search" autocomplete="off">
+            <div id="search-box" class="search-box">
+                <div id="chips" class="chips"></div>
+                <input type="text" id="search-input" placeholder="Describe an image…" aria-label="Search">
+                <div class="search-actions">
+                    <label for="file-input" class="link-btn file-btn" title="Search with an image from your device">+ IMAGE</label>
+                    <input type="file" id="file-input" accept="image/*" multiple hidden>
+                    <button type="button" id="clear-btn" class="link-btn" hidden>CLEAR</button>
+                    <button type="button" id="undo-btn" class="link-btn" hidden>UNDO</button>
+                    <button type="submit" id="search-btn" class="search-btn" aria-label="Search">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.2" y2="16.2"/></svg>
+                    </button>
                 </div>
+            </div>
+            <p class="search-hint">…or drop an image here</p>
+        </form>
+
+        <div id="sb-body" class="sb-body">
+            <section class="sb-section">
+                <button type="button" id="settings-toggle" class="sb-heading" aria-expanded="false" aria-controls="settings-panel">
+                    SETTINGS <span class="sb-heading-icon">+</span>
+                </button>
+                <div id="settings-panel" class="settings" hidden>
+                    <button type="button" id="diversity-toggle" class="toggle" aria-pressed="false">
+                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                        <span class="toggle-label">Boost diversity</span>
+                    </button>
+
+                    <div class="settings-label">Combination mode</div>
+                    <div class="mode-group">
+                        <label class="mode"><input type="radio" name="combination-mode" value="centroid">
+                            <span class="mode-symbol">ø</span><span class="mode-info"><span class="mode-name">Barycentre</span><span class="mode-desc">Vibe général de tous les éléments</span></span></label>
+                        <label class="mode"><input type="radio" name="combination-mode" value="intersection">
+                            <span class="mode-symbol">∩</span><span class="mode-info"><span class="mode-name">Intersection</span><span class="mode-desc">Points communs à tous</span></span></label>
+                        <label class="mode"><input type="radio" name="combination-mode" value="union">
+                            <span class="mode-symbol">∪</span><span class="mode-info"><span class="mode-name">Union</span><span class="mode-desc">Ressemble à l'un d'eux</span></span></label>
+                        <label class="mode"><input type="radio" name="combination-mode" value="pca">
+                            <span class="mode-symbol">≡</span><span class="mode-info"><span class="mode-name">Composante commune</span><span class="mode-desc">Axe partagé entre les éléments</span></span></label>
+                        <label class="mode"><input type="radio" name="combination-mode" value="purified" checked>
+                            <span class="mode-symbol">◎</span><span class="mode-info"><span class="mode-name">Spécificité</span><span class="mode-desc">Ce qui est unique à la requête</span></span></label>
+                    </div>
+
+                    <div id="negative-settings" hidden>
+                        <div class="settings-label">Negative mode</div>
+                        <div class="mode-group">
+                            <label class="mode"><input type="radio" name="negative-mode" value="directed" checked>
+                                <span class="mode-symbol">⊖</span><span class="mode-info"><span class="mode-name">Soustraction dirigée</span><span class="mode-desc">Retire ce qui distingue le négatif</span></span></label>
+                            <label class="mode"><input type="radio" name="negative-mode" value="orthogonal">
+                                <span class="mode-symbol">⊥</span><span class="mode-info"><span class="mode-name">Projection orthogonale</span><span class="mode-desc">Efface la composante négative</span></span></label>
+                            <label class="mode"><input type="radio" name="negative-mode" value="penalty">
+                                <span class="mode-symbol">↓</span><span class="mode-info"><span class="mode-name">Pénalité de score</span><span class="mode-desc">Pénalise ce qui ressemble au négatif</span></span></label>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="sb-section sb-collections">
+                <div class="sb-heading-row">
+                    <span class="sb-label">COLLECTIONS</span>
+                    <button type="button" id="new-collection-btn" class="link-btn">+ NEW</button>
+                </div>
+                <ul id="collection-list" class="collection-list"></ul>
+            </section>
+
+            <section class="sb-section sb-account">
+                <span class="sb-label">ACCOUNT</span>
+                <p class="sb-note">Sign in to keep your collections on every device.</p>
+                <form id="auth-form" class="auth-form">
+                    <input type="email" id="auth-email" placeholder="your@email.com" required aria-label="Email">
+                    <button type="submit" id="auth-btn" class="pill-btn">SEND LINK</button>
+                </form>
+                <p id="auth-status" class="sb-note" hidden></p>
+            </section>
+        </div>
+    </aside>
+
+    <main id="main" class="main">
+        <div id="view-header" class="view-header" hidden>
+            <button type="button" id="back-btn" class="link-btn">← RESULTS</button>
+            <input type="text" id="collection-name" class="collection-name" aria-label="Collection name">
+            <span id="collection-count" class="view-count"></span>
+            <div class="view-actions">
+                <button type="button" id="collection-search-btn" class="pill-btn">VISUAL RESEARCH</button>
+                <button type="button" id="collection-delete-btn" class="link-btn">DELETE</button>
             </div>
         </div>
 
-        <!-- Filter button: visible after first search, top-right -->
-        <button id="filter-btn" class="filter-btn" aria-label="Filtres" aria-expanded="false">
-            <span class="filter-btn-icon">+</span>
-        </button>
-    </header>
+        <section id="empty-state" class="empty-state">
+            <h1>Search 408,000 public-domain artworks.</h1>
+            <p>From The Met, the Cleveland Museum of Art, the Art Institute of Chicago and the Smithsonian.
+                Describe what you are looking for, or drop an image in the search bar.</p>
+            <div class="suggestions">
+                <button type="button" class="suggestion">FISHING BY NIGHT</button>
+                <button type="button" class="suggestion">STORM AT SEA</button>
+                <button type="button" class="suggestion">BLUE AND WHITE CERAMICS</button>
+                <button type="button" class="suggestion">PORTRAIT WITH A DOG</button>
+                <button type="button" class="suggestion">BOTANICAL DRAWING</button>
+            </div>
+        </section>
 
-
-
-    <main id="gallery" class="gallery">
-        <!-- Images will be injected here -->
+        <div id="gallery" class="masonry"></div>
+        <div id="status" class="status" hidden></div>
+        <div id="sentinel" class="sentinel"></div>
     </main>
 
-    <!-- Lightbox -->
-    <div id="lightbox" class="lightbox" role="dialog" aria-modal="true">
-        <!-- Similar images strip (hidden when no cluster) -->
-        <div id="lb-similaires" class="lb-similaires" aria-hidden="true">
-            <span id="lb-sim-label" class="lb-sim-label"></span>
-            <div id="lb-sim-strip" class="lb-sim-strip"></div>
+    <div id="lightbox" class="lightbox" role="dialog" aria-modal="true" aria-label="Artwork" hidden>
+        <div id="lb-similar" class="lb-similar" hidden>
+            <span id="lb-similar-label" class="lb-similar-label"></span>
+            <div id="lb-similar-strip" class="lb-similar-strip"></div>
         </div>
-        <div class="lightbox-img-wrap">
-            <img id="lightbox-img" src="" alt="">
+        <div class="lb-stage">
+            <button type="button" id="lb-prev" class="lb-nav lb-prev" aria-label="Previous">‹</button>
+            <img id="lb-img" alt="">
+            <button type="button" id="lb-next" class="lb-nav lb-next" aria-label="Next">›</button>
         </div>
-        <div class="lightbox-bar">
-            <div class="lightbox-meta">
-                <div id="lightbox-title"></div>
-                <div class="lightbox-sub">
-                    <span id="lightbox-author"></span>
-                    <span id="lightbox-museum"></span>
+        <div class="lb-bar">
+            <div class="lb-meta">
+                <div id="lb-title" class="lb-title"></div>
+                <div class="lb-sub">
+                    <span id="lb-author"></span>
+                    <a id="lb-museum" target="_blank" rel="noopener noreferrer"></a>
                 </div>
             </div>
-            <div class="lightbox-actions">
-                <button id="lightbox-pin" class="lb-pin-btn">PIN</button>
-                <a id="lightbox-download" href="" download class="download-btn">DOWNLOAD</a>
+            <div class="lb-actions">
+                <button type="button" id="lb-collect" class="lb-action">COLLECT</button>
+                <button type="button" id="lb-visual" class="lb-action">VISUAL RESEARCH</button>
+                <a id="lb-download" class="lb-action" target="_blank" rel="noopener noreferrer" download>DOWNLOAD</a>
             </div>
         </div>
-        <button class="lightbox-close" aria-label="Fermer"></button>
+        <button type="button" id="lb-close" class="lb-close" aria-label="Close"></button>
     </div>
-    <!-- Cluster group lightbox -->
-    <div id="cluster-lightbox" class="cluster-lightbox" role="dialog" aria-modal="true">
-        <div class="cluster-header">
-            <button class="cluster-back" id="cluster-back" aria-label="Retour">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="15 18 9 12 15 6"></polyline>
-                </svg>
-            </button>
-            <span id="cluster-label" class="cluster-label"></span>
-            <button class="lightbox-close cluster-close" aria-label="Fermer"></button>
-        </div>
-        <div id="cluster-grid" class="cluster-grid"></div>
-    </div>
-    <script src="app.js?v=14"></script>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="app.js?v=20"></script>
 </body>
 
 </html>

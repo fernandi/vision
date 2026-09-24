@@ -9,6 +9,10 @@ import time
 import base64
 import io
 
+import numpy as np
+import torch
+from PIL import Image
+
 from app.backend.search_engine import VisualSearchEngine
 from app.backend.auth import router as auth_router
 
@@ -71,6 +75,26 @@ def get_image_url(item: dict) -> str:
     return f"/images/{item.get('filename', '')}"
 
 
+def _encode_b64_image(b64: str) -> np.ndarray:
+    """CLIP-encode an uploaded image → normalised (1, D) float32."""
+    img = Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
+    inputs = search_engine.processor(images=img, return_tensors="pt").to(search_engine.device)
+    with torch.no_grad():
+        output = search_engine.model.get_image_features(**inputs)
+    if not isinstance(output, torch.Tensor):
+        output = output.pooler_output if hasattr(output, "pooler_output") else output.last_hidden_state[:, 0]
+    feat = output / output.norm(p=2, dim=-1, keepdim=True)
+    return feat.cpu().numpy().astype("float32")
+
+
+def _indexed_embedding(faiss_id: int) -> np.ndarray:
+    """Stored vector of an already-indexed image → normalised (1, D) float32.
+    Avoids re-downloading the image, which the browser often can't (no CORS)."""
+    vec = search_engine.index.reconstruct(int(faiss_id)).reshape(1, -1).astype("float32")
+    norm = np.linalg.norm(vec, axis=1, keepdims=True)
+    return vec / np.where(norm == 0, 1e-9, norm)
+
+
 # API Models
 class SearchRequest(BaseModel):
     query: str = ""          # may be empty when searching by image only
@@ -84,6 +108,8 @@ class SearchRequest(BaseModel):
     combination_mode: Optional[str] = "purified" # how query elements are combined
     negative_images: Optional[List[str]] = None  # base64 negative images
     negative_mode: Optional[str] = "directed"    # directed | orthogonal | penalty
+    reference_ids: Optional[List[int]] = None    # indexed images used as references (faiss ids)
+    negative_ids: Optional[List[int]] = None     # indexed images used as negatives (faiss ids)
 
 # Routes
 @app.get("/health")
@@ -106,52 +132,23 @@ def search(req: SearchRequest):
         ensure_loaded()  # no-op if already loaded at startup
         t0 = time.time()
 
-        # Collect all reference images (supports list or legacy single)
-        image_embedding = None
-        individual_image_embeddings = []   # per-image normalized (1, D) arrays
         b64_list = req.reference_images or ([req.reference_image] if req.reference_image else [])
-        if b64_list:
-            from PIL import Image
-            import torch
-            import numpy as np
-            processor = search_engine.processor
-            model     = search_engine.model
-            device    = search_engine.device
-            for b64 in b64_list:
-                img_data = base64.b64decode(b64)
-                img = Image.open(io.BytesIO(img_data)).convert("RGB")
-                inputs = processor(images=img, return_tensors="pt").to(device)
-                with torch.no_grad():
-                    output = model.get_image_features(**inputs)
-                if not isinstance(output, torch.Tensor):
-                    feat = output.pooler_output if hasattr(output, "pooler_output") else output.last_hidden_state[:, 0]
-                else:
-                    feat = output
-                feat = feat / feat.norm(p=2, dim=-1, keepdim=True)
-                individual_image_embeddings.append(feat.cpu().numpy().astype("float32"))  # (1, D)
-            # Averaged embedding (kept for legacy cache key hashing)
-            if individual_image_embeddings:
-                import numpy as np
-                avg  = np.mean(np.stack(individual_image_embeddings, axis=0), axis=0)
-                norm = np.linalg.norm(avg, axis=1, keepdims=True)
-                image_embedding = (avg / np.where(norm == 0, 1e-9, norm)).astype("float32")
+        individual_image_embeddings = (
+            [_encode_b64_image(b) for b in b64_list]
+            + [_indexed_embedding(i) for i in (req.reference_ids or [])]
+        )
+        image_embedding = None   # averaged, used for the server-side cache key
+        if individual_image_embeddings:
+            avg  = np.mean(np.stack(individual_image_embeddings, axis=0), axis=0)
+            norm = np.linalg.norm(avg, axis=1, keepdims=True)
+            image_embedding = (avg / np.where(norm == 0, 1e-9, norm)).astype("float32")
 
-        # ── Process negative images ──
-        negative_embeddings = []
-        for b64 in (req.negative_images or []):
-            img_data = base64.b64decode(b64)
-            img = Image.open(io.BytesIO(img_data)).convert("RGB")
-            inputs = processor(images=img, return_tensors="pt").to(device)
-            with torch.no_grad():
-                output = model.get_image_features(**inputs)
-            if not isinstance(output, torch.Tensor):
-                feat = output.pooler_output if hasattr(output, "pooler_output") else output.last_hidden_state[:, 0]
-            else:
-                feat = output
-            feat = feat / feat.norm(p=2, dim=-1, keepdim=True)
-            negative_embeddings.append(feat.cpu().numpy().astype("float32"))
+        negative_embeddings = (
+            [_encode_b64_image(b) for b in (req.negative_images or [])]
+            + [_indexed_embedding(i) for i in (req.negative_ids or [])]
+        )
 
-        n_imgs = len(b64_list)
+        n_imgs = len(individual_image_embeddings)
         data = search_engine.search(
             req.query,
             pool_size=req.pool_size,
