@@ -8,7 +8,7 @@
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Ctext x='16' y='23' font-family='Arial' font-weight='700' font-size='20' fill='%23fff' text-anchor='middle'%3EG%3C/text%3E%3C/svg%3E">
     <link rel="preload" href="fonts/JunicodeVF-Roman.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="fonts/JunicodeVF-Italic.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="style.css?v=24">
+    <link rel="stylesheet" href="style.css?v=25">
 </head>
 
 <body>
@@ -120,16 +120,17 @@
             </div>
         </div>
 
-        <section id="empty-state" class="empty-state">
-            <h1>Search <em>408,000</em> <span class="nowrap">public-domain</span> artworks.</h1>
-            <p>From The Met, the Cleveland Museum of Art, the Art Institute of Chicago and the Smithsonian.
-                Describe what you are looking for, or drop an image in the search bar.</p>
-            <div class="suggestions">
-                <button type="button" class="suggestion">FISHING BY NIGHT</button>
-                <button type="button" class="suggestion">STORM AT SEA</button>
-                <button type="button" class="suggestion">BLUE AND WHITE CERAMICS</button>
-                <button type="button" class="suggestion">PORTRAIT WITH A DOG</button>
-                <button type="button" class="suggestion">BOTANICAL DRAWING</button>
+        <section id="empty-state" class="landing is-loading" aria-label="Welcome to Glane">
+            <div id="landing-stage" class="landing-stage"></div>
+            <div class="landing-center">
+                <h1 class="wordmark" aria-label="Glane">
+                    <span class="wm-letter" style="--i:0" aria-hidden="true">G</span><span class="wm-letter" style="--i:1" aria-hidden="true">l</span><span class="wm-letter" style="--i:2" aria-hidden="true">a</span><span class="wm-letter" style="--i:3" aria-hidden="true">n</span><span class="wm-letter" style="--i:4" aria-hidden="true">e</span>
+                </h1>
+                <div class="landing-progress" aria-hidden="true"><span id="landing-progress-bar"></span></div>
+                <p class="landing-tagline">Search <em>408,000</em> <span class="nowrap">public-domain</span> artworks.</p>
+                <p class="landing-sub">From The Met, the Cleveland Museum of Art, the Art Institute of Chicago and the Smithsonian.
+                    Describe what you are looking for, drop an image, or try a prompt.</p>
+                <div id="landing-prompts" class="suggestions"></div>
             </div>
         </section>
 
@@ -191,7 +192,7 @@
         <button type="button" id="toast-action" class="toast-action" hidden></button>
     </div>
 
-    <script src="app.js?v=24"></script>
+    <script src="app.js?v=25"></script>
 </body>
 
 </html>

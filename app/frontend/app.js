@@ -14,7 +14,6 @@ const MUSEUMS = {
     artic: 'Art Institute of Chicago',
     Smithonian: 'Smithsonian',
 };
-const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 const ICON = {
     collect: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>',
@@ -289,7 +288,7 @@ function makeGrid(container) {
             this.heights[e.col] -= e.ratio + this.GAP;
             this.entries.splice(idx, 1);
             this.items = this.items.filter(i => i !== node._item);
-            if (!animate || reduceMotion.matches) { node.remove(); return; }
+            if (!animate) { node.remove(); return; }
             node.classList.add('leaving');
             node.addEventListener('animationend', () => node.remove(), { once: true });
         },
@@ -535,7 +534,7 @@ function flyToCollection(cid, fromImg) {
     const dest = rowFor(cid)?.querySelector('.collection-cover');
     const bumpTarget = () => bumpRow(cid);
     const b = dest?.getBoundingClientRect();
-    if (!b || !fromImg || reduceMotion.matches || b.height === 0 || b.bottom < 0 || b.top > window.innerHeight) {
+    if (!b || !fromImg || b.height === 0 || b.bottom < 0 || b.top > window.innerHeight) {
         bumpTarget();
         return;
     }
@@ -667,7 +666,7 @@ function closePicker(immediate = false) {
     if (picker.hidden) return;
     pickerAnchor?.setAttribute('aria-expanded', 'false');
     pickerAnchor = null;
-    if (immediate || reduceMotion.matches) { picker.hidden = true; return; }
+    if (immediate) { picker.hidden = true; return; }
     picker.classList.add('closing');
     setTimeout(() => { picker.hidden = true; picker.classList.remove('closing'); }, 170);
 }
@@ -696,7 +695,6 @@ function openDialog(build) {
 
 function closeDialog() {
     if (!dialog.open) return;
-    if (reduceMotion.matches) { dialog.close(); return; }
     dialog.classList.add('closing');
     dialog.addEventListener('animationend', () => { dialog.close(); dialog.classList.remove('closing'); }, { once: true });
 }
@@ -1290,7 +1288,7 @@ function closeLightbox() {
     lbCloseTimer = setTimeout(() => {
         lightbox.hidden = true;
         lbImg.removeAttribute('src');
-    }, reduceMotion.matches ? 0 : 300);
+    }, 300);
 }
 
 function paintLightboxActions() {
@@ -1316,12 +1314,12 @@ function showInLightbox(item, withSimilar, direction) {
     lbImg.style.opacity = '0';
     lbImg.onload = () => {
         lbImg.style.opacity = '';
-        if (direction && !reduceMotion.matches) {
+        if (direction) {
             lbImg.animate([
                 { opacity: 0, transform: `translateX(${direction * 28}px) scale(0.985)` },
                 { opacity: 1, transform: 'none' },
             ], { duration: 480, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' });
-        } else if (!reduceMotion.matches) {
+        } else {
             lbImg.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, easing: 'ease' });
         }
     };
@@ -1434,10 +1432,6 @@ $('clear-btn').addEventListener('click', clearAll);
 $('undo-btn').addEventListener('click', undoClear);
 $('file-input').addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
 
-document.querySelectorAll('.suggestion').forEach(btn => btn.addEventListener('click', () => {
-    searchInput.value = btn.textContent;
-    runSearch();
-}));
 
 const dropZone = $('search-form');
 dropZone.addEventListener('dragover', e => {
@@ -1724,6 +1718,175 @@ async function initAccount() {
     }
 }
 
+// ── Landing: animated wordmark + floating images that preview each prompt ──
+// The images come from a static file (landing.json): no search runs on arrival.
+const LANDING_SLOTS = [
+    { x: '3%', y: '7%', w: '12%', depth: 26, dur: '7.5s', rot: 1.4 },
+    { x: '16%', y: '34%', w: '10%', depth: 14, dur: '9s', rot: -1.1 },
+    { x: '4%', y: '58%', w: '13%', depth: 32, dur: '8.2s', rot: 0.9 },
+    { x: '19%', y: '80%', w: '10%', depth: 18, dur: '10s', rot: -1.6 },
+    { x: '77%', y: '6%', w: '12%', depth: 22, dur: '8.8s', rot: -1.2 },
+    { x: '89%', y: '31%', w: '9%', depth: 12, dur: '9.6s', rot: 1.3 },
+    { x: '75%', y: '55%', w: '11%', depth: 30, dur: '7.8s', rot: -0.8 },
+    { x: '87%', y: '76%', w: '11%', depth: 20, dur: '10.5s', rot: 1.1 },
+    { x: '39%', y: '86%', w: '8%', depth: 10, dur: '11s', rot: 0.7 },
+    { x: '56%', y: '3%', w: '7%', depth: 8, dur: '12s', rot: -0.9 },
+];
+const LANDING_READY_TIMEOUT_MS = 6000;
+
+const Landing = {
+    data: null,
+    sets: [],            // [default mix, prompt 1, prompt 2, …]
+    current: 0,
+    cards: [],
+    grid: { items: [] }, // lightbox navigation over the floating images
+    swapTimer: null,
+
+    async init() {
+        const params = new URLSearchParams(location.search);
+        if (params.has('q') || params.has('ref')) { this.finish(); return; }   // arriving on a search
+        try {
+            this.data = await (await fetch('landing.json')).json();
+        } catch (err) {
+            console.error('landing', err);
+            this.finish();
+            return;
+        }
+        const prompts = this.data.prompts;
+        const mix = [];
+        for (let round = 0; mix.length < LANDING_SLOTS.length && round < 10; round++) {
+            for (const p of prompts) if (p.items[round] && mix.length < LANDING_SLOTS.length) mix.push(p.items[round]);
+        }
+        this.sets = [mix, ...prompts.map(p => p.items.slice(0, LANDING_SLOTS.length))];
+        this.buildPrompts(prompts);
+        this.buildCards();
+        await this.preload(this.sets[0], true);
+        this.finish();
+        this.show(0, false);
+        // Warm the other sets so hovering a prompt swaps instantly.
+        const rest = this.sets.slice(1).flat();
+        (window.requestIdleCallback || setTimeout)(() => this.preload(rest, false));
+    },
+
+    buildPrompts(prompts) {
+        const box = $('landing-prompts');
+        prompts.forEach((p, i) => {
+            const b = el('button', 'suggestion', p.label);
+            b.type = 'button';
+            b.style.setProperty('--i', i);
+            b.addEventListener('click', () => { searchInput.value = p.label; runSearch(); });
+            if (window.matchMedia('(hover: hover)').matches) {
+                b.addEventListener('mouseenter', () => this.preview(i + 1, b));
+                b.addEventListener('focus', () => this.preview(i + 1, b));
+            }
+            box.appendChild(b);
+        });
+    },
+
+    buildCards() {
+        const stage = $('landing-stage');
+        this.cards = LANDING_SLOTS.map((slot, n) => {
+            const card = el('button', 'float-card');
+            card.type = 'button';
+            for (const [k, v] of Object.entries(slot)) card.style.setProperty(`--${k}`, v);
+            card.style.setProperty('--n', n);
+            const inner = el('span', 'float-inner');
+            const img = new Image();
+            img.alt = '';
+            img.decoding = 'async';
+            img.addEventListener('error', () => {
+                if (card._item?.orig && img.src !== new URL(card._item.orig, location.href).href) img.src = card._item.orig;
+            });
+            inner.append(img, el('span', 'float-title'));
+            card.appendChild(inner);
+            card.addEventListener('click', () => { if (card._item) openLightbox(this.grid, card._item); });
+            stage.appendChild(card);
+            return card;
+        });
+        this.parallax(stage);
+    },
+
+    preload(items, track) {
+        const bar = $('landing-progress-bar');
+        let done = 0;
+        const all = items.map(it => preload(it).then(() => {
+            done++;
+            if (track) bar.style.setProperty('--p', done / items.length);
+        }));
+        const everything = Promise.all(all);
+        return track ? Promise.race([everything, new Promise(r => setTimeout(r, LANDING_READY_TIMEOUT_MS))]) : everything;
+    },
+
+    // The wordmark waves at least twice, then each letter stops at the end of
+    // its current cycle, so it settles on the resting shape without a jump.
+    finish() {
+        const landing = $('empty-state');
+        const letters = landing.querySelectorAll('.wm-letter');
+        letters.forEach(letter => letter.classList.add('is-waving'));
+        landing.classList.remove('is-loading');
+        requestAnimationFrame(() => letters.forEach(letter => {
+            const wave = letter.getAnimations().find(a => a.animationName === 'wmWave');
+            if (!wave) return;
+            const current = wave.effect.getComputedTiming().currentIteration;
+            wave.effect.updateTiming({ iterations: Math.max(2, (current ?? 0) + 1) });
+        }));
+    },
+
+    show(setIndex, animate) {
+        const items = this.sets[setIndex] || [];
+        this.current = setIndex;
+        this.grid.items = items.slice();
+        this.cards.forEach((card, n) => {
+            const item = items[n];
+            const apply = () => {
+                card._item = item;
+                card.hidden = !item;
+                if (!item) return;
+                const img = card.querySelector('img');
+                img.src = item.src;
+                card.style.setProperty('--ratio', item.ratio || 1.2);
+                card.querySelector('.float-title').textContent = item.title;
+                card.setAttribute('aria-label', `Open ${item.title}`);
+                card.classList.remove('swap-out');
+            };
+            if (!animate) { apply(); return; }
+            setTimeout(() => {
+                card.classList.add('swap-out');
+                setTimeout(apply, 320);
+            }, n * 45);
+        });
+    },
+
+    preview(setIndex, button) {
+        document.querySelectorAll('#landing-prompts .suggestion').forEach(b => b.classList.toggle('is-previewing', b === button));
+        if (setIndex === this.current) return;
+        clearTimeout(this.swapTimer);
+        this.swapTimer = setTimeout(() => this.show(setIndex, true), 90);
+    },
+
+    // Images drift toward the mouse, each at its own depth.
+    parallax(stage) {
+        if (!window.matchMedia('(hover: hover)').matches) return;
+        const target = { x: 0, y: 0 };
+        const now = { x: 0, y: 0 };
+        let running = false;
+        const tick = () => {
+            now.x += (target.x - now.x) * 0.06;
+            now.y += (target.y - now.y) * 0.06;
+            stage.style.setProperty('--mx', now.x.toFixed(4));
+            stage.style.setProperty('--my', now.y.toFixed(4));
+            running = Math.abs(target.x - now.x) + Math.abs(target.y - now.y) > 0.001;
+            if (running) requestAnimationFrame(tick);
+        };
+        $('empty-state').addEventListener('mousemove', e => {
+            const r = stage.getBoundingClientRect();
+            target.x = ((e.clientX - r.left) / r.width - 0.5) * 2;
+            target.y = ((e.clientY - r.top) / r.height - 0.5) * 2;
+            if (!running) { running = true; requestAnimationFrame(tick); }
+        });
+    },
+};
+
 // ── Init ────────────────────────────────────────────────────────────────────
 Collections.load();
 mainGrid.build();
@@ -1732,3 +1895,4 @@ renderSidebarCollections();
 renderChips();
 restoreFromUrl();
 initAccount();
+Landing.init();
