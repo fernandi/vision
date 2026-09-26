@@ -659,6 +659,19 @@ body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hi
 }
 .collection-name:hover { border-bottom-color: var(--faint); }
 .collection-name:focus { border-bottom-color: var(--ink); }
+.shared-title { display: flex; flex-direction: column; gap: 0.1rem; }
+.shared-name { font-size: 1.7rem; }
+.share-link {
+    width: 100%;
+    margin-top: 1rem;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--bg);
+    font-size: 0.85rem;
+    outline: 0;
+}
+.share-link:focus { border-color: var(--ink); }
 .view-count { font-size: 0.84rem; font-style: italic; color: var(--muted); }
 .view-actions { margin-left: auto; display: flex; align-items: center; gap: 1rem; }
 

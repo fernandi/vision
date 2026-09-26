@@ -37,6 +37,16 @@ SCHEMA = [
         deleted INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (user_id, id)
     )""",
+    # Shared collection links. Signed-in owners share their live collection
+    # (user_id + collection_id); guests share a snapshot (name + items).
+    """CREATE TABLE IF NOT EXISTS shares (
+        slug TEXT PRIMARY KEY,
+        user_id TEXT,
+        collection_id TEXT,
+        name TEXT NOT NULL,
+        items TEXT NOT NULL,
+        created_at BIGINT NOT NULL
+    )""",
     # "WTF flag" reports from visitors: candidates for app/backend/denylist.txt.
     """CREATE TABLE IF NOT EXISTS flags (
         faiss_id BIGINT PRIMARY KEY,

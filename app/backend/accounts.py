@@ -9,6 +9,8 @@ Accounts: passwordless sign-in by email link, and collections saved per user.
   GET  /api/collections         the user's collections (+ ids deleted elsewhere)
   PUT  /api/collections/{id}    create / update, last write wins on updated_at
   DELETE /api/collections/{id}  leaves a tombstone so other devices drop it too
+  POST /api/shares              share a collection (live for its signed-in owner, else a snapshot)
+  GET  /api/shares/{slug}       read a shared collection (no account needed)
   POST /flag                    {faiss_id} report an irrelevant image
 """
 import hashlib
@@ -335,6 +337,57 @@ def delete_collection(cid: str, request: Request, updated_at: int = 0):
                ON CONFLICT (user_id, id) DO UPDATE SET deleted = 1, items = '[]', updated_at = excluded.updated_at""",
             (uid, cid, stamp))
     return {"status": "deleted"}
+
+
+# ── Shared collections ───────────────────────────────────────────────────────
+class ShareIn(BaseModel):
+    collection_id: Optional[str] = Field(default=None, max_length=40)
+    name: str = Field(min_length=1, max_length=120)
+    items: List[ItemIn] = Field(default_factory=list, max_length=2000)
+
+
+@router.post("/api/shares")
+def create_share(body: ShareIn, request: Request):
+    """Signed-in owner of a saved collection → live link; otherwise a snapshot."""
+    if not _allow(f"share:{_client_ip(request)}", 30, 3600):
+        raise HTTPException(429, "Too many links. Please try again later.")
+    uid = current_user_id(request)
+    with db.transaction() as d:
+        if uid and body.collection_id:
+            owned = d.one("SELECT id FROM collections WHERE user_id = ? AND id = ? AND deleted = 0",
+                          (uid, body.collection_id))
+            if owned:
+                existing = d.one("SELECT slug FROM shares WHERE user_id = ? AND collection_id = ?",
+                                 (uid, body.collection_id))
+                if existing:
+                    return {"slug": existing["slug"], "live": True}
+                slug = secrets.token_urlsafe(8)
+                d.execute("INSERT INTO shares (slug, user_id, collection_id, name, items, created_at) VALUES (?, ?, ?, ?, '[]', ?)",
+                          (slug, uid, body.collection_id, body.name, _now()))
+                return {"slug": slug, "live": True}
+        if not body.items:
+            raise HTTPException(400, "Nothing to share")
+        slug = secrets.token_urlsafe(8)
+        d.execute("INSERT INTO shares (slug, user_id, collection_id, name, items, created_at) VALUES (?, NULL, NULL, ?, ?, ?)",
+                  (slug, body.name.strip(), json.dumps([i.model_dump() for i in body.items], ensure_ascii=False), _now()))
+    return {"slug": slug, "live": False}
+
+
+@router.get("/api/shares/{slug}")
+def read_share(slug: str):
+    if not re.fullmatch(r"[A-Za-z0-9_-]{6,20}", slug):
+        raise HTTPException(404, "Link not found")
+    with db.transaction() as d:
+        share = d.one("SELECT * FROM shares WHERE slug = ?", (slug,))
+        if not share:
+            raise HTTPException(404, "Link not found")
+        if share["user_id"]:
+            col = d.one("SELECT name, items FROM collections WHERE user_id = ? AND id = ? AND deleted = 0",
+                        (share["user_id"], share["collection_id"]))
+            if not col:
+                raise HTTPException(404, "This collection is no longer shared")
+            return {"name": col["name"], "items": json.loads(col["items"]), "live": True}
+    return {"name": share["name"], "items": json.loads(share["items"]), "live": False}
 
 
 # ── Irrelevant-image reports ("WTF flag") ────────────────────────────────────

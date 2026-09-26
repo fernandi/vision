@@ -916,6 +916,7 @@ function showView(name) {
     $('empty-state').hidden = name !== 'empty';
     document.body.classList.toggle('is-landing', name === 'empty');
     $('view-header').hidden = name !== 'collection';
+    $('shared-header').hidden = name !== 'shared';
     $('recos').hidden = true;
     if (name !== 'collection') viewingId = null;
     renderSidebarCollections();
@@ -993,6 +994,8 @@ function updateUrl() {
 
 async function restoreFromUrl() {
     const params = new URLSearchParams(location.search);
+    if (params.get('c')) { openShared(params.get('c')); return; }
+    if (params.get('i')) { openSharedImage(Number(params.get('i'))); return; }
     const text = params.get('q') || '';
     const ids = (params.get('ref') || '').split(',').filter(Boolean).map(Number)
         .filter(n => Number.isInteger(n) && n >= 0);
@@ -1261,6 +1264,102 @@ $('collection-delete-btn').addEventListener('click', async () => {
 
 $('back-btn').addEventListener('click', backToResults);
 
+// ── Sharing ─────────────────────────────────────────────────────────────────
+const shareUrl = (key, value) => `${location.origin}${location.pathname}?${key}=${encodeURIComponent(value)}`;
+
+// Phones get the system share sheet; elsewhere a dialog with the link and COPY.
+async function shareLink(url, title, text) {
+    if (navigator.share && window.matchMedia('(hover: none)').matches) {
+        try { await navigator.share({ title, text, url }); return; }
+        catch (err) { if (err.name === 'AbortError') return; }
+    }
+    openDialog(d => {
+        d.append(el('div', 'dialog-title', t('share.title')), el('div', 'dialog-text', text));
+        const input = el('input', 'share-link');
+        input.readOnly = true;
+        input.value = url;
+        input.addEventListener('focus', () => input.select());
+        d.appendChild(input);
+        const foot = el('div', 'dialog-foot');
+        const copy = dialogButton(t('share.copy'), 'pill-btn', async () => {
+            try { await navigator.clipboard.writeText(url); }
+            catch { input.select(); document.execCommand('copy'); }
+            copy.textContent = t('share.copied');
+        });
+        foot.append(dialogButton(t('share.close'), 'link-btn', closeDialog));
+        if (navigator.share) foot.append(dialogButton(t('share.send'), 'link-btn', () => navigator.share({ title, url }).catch(() => { })));
+        foot.append(copy);
+        d.appendChild(foot);
+    });
+}
+
+$('collection-share-btn').addEventListener('click', async e => {
+    const c = Collections.get(viewingId);
+    if (!c.items.length) { toast(t('share.empty')); return; }
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+        if (Sync.on) { Sync.dirty.add(c.id); await Sync.flush(); }   // a live link needs the collection on the server
+        const res = await api('/api/shares', { method: 'POST', body: { collection_id: c.id, name: c.name, items: toServer(c).items } });
+        shareLink(shareUrl('c', res.slug), c.name, t(res.live ? 'share.collectionLive' : 'share.collectionSnapshot'));
+    } catch (err) {
+        console.error(err);
+        toast(t('share.failed'));
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+let shared = null;   // collection opened from a ?c= link
+
+async function openShared(slug) {
+    closeMenu();
+    showView('shared');
+    const gen = renderGen;
+    mainGrid.skeleton(8);
+    try {
+        shared = await api(`/api/shares/${encodeURIComponent(slug)}`);
+    } catch (err) {
+        mainGrid.reset();
+        $('shared-header').hidden = true;
+        setStatus(statusEl, t('shared.missing'));
+        return;
+    }
+    if (gen !== renderGen) return;
+    $('shared-name').textContent = shared.name;
+    $('shared-count').textContent = countLabel(shared.items.length);
+    $('shared-search-btn').disabled = !shared.items.some(i => i.id != null);
+    fillGrid(mainGrid, shared.items, gen, 'results');
+}
+
+async function openSharedImage(id) {
+    if (!Number.isInteger(id) || id < 0) return;
+    try {
+        const data = await postJSON('/cluster-members', { faiss_ids: [id] });
+        const item = data.results.map(toItem)[0];
+        if (item) openLightbox({ items: [item] }, item);
+    } catch (err) { console.error(err); }
+}
+
+$('shared-save-btn').addEventListener('click', () => {
+    if (!shared) return;
+    const c = Collections.create(shared.name);
+    [...shared.items].reverse().forEach(item => Collections.add(c.id, item));
+    setTarget(c.id, false);
+    repaintAll();
+    bumpRow(c.id);
+    toast(t('shared.saved', { name: c.name }));
+});
+
+$('shared-search-btn').addEventListener('click', () => {
+    if (!shared) return;
+    query.refs = shared.items.filter(i => i.id != null).slice(0, MAX_COLLECTION_REFS).map(refFromItem);
+    query.negs = [];
+    searchInput.value = '';
+    renderChips();
+    runSearch();
+});
+
 // ── Lightbox ────────────────────────────────────────────────────────────────
 const lightbox = $('lightbox');
 const lbImg = $('lb-img');
@@ -1287,6 +1386,7 @@ function closeLightbox() {
     lightbox.classList.remove('is-open');
     document.body.style.overflow = '';
     lbItem = null;
+    if (new URLSearchParams(location.search).has('i')) history.replaceState(null, '', location.pathname);
     lbCloseTimer = setTimeout(() => {
         lightbox.hidden = true;
         lbImg.removeAttribute('src');
@@ -1298,6 +1398,8 @@ function paintLightboxActions() {
     const collect = $('lb-collect');
     collect.classList.toggle('on', Boolean(target) && Collections.contains(target.id, lbItem));
     collect.title = target ? t('lb.collectInto', { name: target.name }) : t('lb.collectNew');
+
+    $('lb-share').hidden = lbItem.id == null;
 
     // Choosing a cover only makes sense while browsing a collection.
     const coverBtn = $('lb-cover');
@@ -1397,6 +1499,7 @@ $('lb-collect').addEventListener('click', () => {
     else collectInto(cid, lbItem, null);
 });
 $('lb-cover').addEventListener('click', () => { if (lbItem) setCover(lbItem); });
+$('lb-share').addEventListener('click', () => { if (lbItem) shareLink(shareUrl('i', lbItem.id), lbItem.title, t('share.image')); });
 $('lb-collect-menu').addEventListener('click', e => { e.stopPropagation(); if (lbItem) openPicker(e.currentTarget, lbItem, null); });
 $('lb-visual').addEventListener('click', () => {
     if (!lbItem) return;
@@ -1757,7 +1860,7 @@ const Landing = {
 
     async init() {
         const params = new URLSearchParams(location.search);
-        if (params.has('q') || params.has('ref')) { this.finish(); return; }   // arriving on a search
+        if (params.has('q') || params.has('ref') || params.has('c')) { this.finish(); return; }   // arriving on a search or a shared collection
         try {
             this.data = await (await fetch('landing.json')).json();
         } catch (err) {
