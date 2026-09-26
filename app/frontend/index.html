@@ -8,7 +8,7 @@
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Ctext x='16' y='23' font-family='Arial' font-weight='700' font-size='20' fill='%23fff' text-anchor='middle'%3EG%3C/text%3E%3C/svg%3E">
     <link rel="preload" href="fonts/JunicodeVF-Roman.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="fonts/JunicodeVF-Italic.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="style.css?v=29">
+    <link rel="stylesheet" href="style.css?v=30">
     <!-- Hide the page until Junicode has loaded (revealed by app.js); without JS nothing is hidden. -->
     <script>document.documentElement.classList.add('is-booting');</script>
 </head>
@@ -143,6 +143,29 @@
             </div>
         </div>
 
+        <section id="weather-header" class="weather-header" hidden>
+            <div class="weather-top">
+                <span class="sb-label" data-i18n="weather.kicker">WEATHER</span>
+                <div id="weather-day" class="segmented weather-day" role="radiogroup">
+                    <label><input type="radio" name="weather-day" value="today" checked><span data-i18n="weather.today"></span></label>
+                    <label><input type="radio" name="weather-day" value="tomorrow"><span data-i18n="weather.tomorrow"></span></label>
+                </div>
+                <div class="view-actions">
+                    <button type="button" id="weather-change" class="link-btn" data-i18n="weather.change">CHANGE PLACE</button>
+                    <button type="button" id="weather-close" class="link-btn" data-i18n="weather.close">CLOSE</button>
+                </div>
+            </div>
+            <div id="weather-body"></div>
+            <p id="weather-meta" class="weather-meta"></p>
+            <form id="weather-place-form" class="weather-place-form" autocomplete="off" hidden>
+                <div class="weather-place-row">
+                    <input type="text" id="weather-place-input" class="weather-place-input" data-i18n-placeholder="weather.placeholder" data-i18n-aria="weather.placeholder">
+                    <button type="button" id="weather-locate" class="pill-btn" data-i18n="weather.locate">USE MY LOCATION</button>
+                </div>
+                <div id="weather-place-list" class="weather-place-list"></div>
+            </form>
+        </section>
+
         <div id="shared-header" class="view-header" hidden>
             <div class="shared-title">
                 <span class="sb-label" data-i18n="shared.kicker">SHARED COLLECTION</span>
@@ -228,8 +251,9 @@
         <button type="button" id="toast-action" class="toast-action" hidden></button>
     </div>
 
-    <script src="i18n.js?v=29"></script>
-    <script src="app.js?v=29"></script>
+    <script src="i18n.js?v=30"></script>
+    <script src="app.js?v=30"></script>
+    <script src="weather.js?v=30"></script>
 </body>
 
 </html>

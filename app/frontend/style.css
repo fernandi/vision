@@ -693,6 +693,54 @@ body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hi
 .view-count { font-size: 0.84rem; font-style: italic; color: var(--muted); }
 .view-actions { margin-left: auto; display: flex; align-items: center; gap: 1rem; }
 
+/* Weather mode: one sentence, then the paintings. */
+.weather-header { padding: 0.4rem 0 1.8rem; animation: slideUp var(--t-mid) var(--ease-out) both; }
+.weather-top { display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem 1.2rem; }
+.weather-day { width: 15rem; }
+.weather-day[hidden] { display: none; }
+.weather-sentence {
+    margin-top: 1.4rem;
+    max-width: 24ch;
+    font-size: clamp(1.9rem, 3.6vw, 3.4rem);
+    line-height: 1.1;
+    text-wrap: balance;
+    animation: slideUp 600ms var(--ease-out) both;
+}
+.weather-sentence.is-loading { color: var(--muted); font-style: italic; }
+.weather-place { font-variant-caps: all-small-caps; letter-spacing: 0.05em; }
+.weather-words { font-style: italic; }
+.weather-meta { margin-top: 0.6rem; font-size: 0.95rem; font-style: italic; color: var(--muted); min-height: 1.3em; }
+.weather-place-form { margin-top: 1.2rem; max-width: 34rem; animation: slideUp var(--t-mid) var(--ease-out) both; }
+.weather-place-form[hidden] { display: none; }
+.weather-place-row { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.weather-place-input {
+    flex: 1;
+    min-width: 12rem;
+    padding: 0.55rem 1rem;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 999px;
+    background: var(--panel);
+    font: inherit;
+    font-size: 1.05rem;
+    outline: 0;
+    transition: border-color var(--t-fast);
+}
+.weather-place-input:focus { border-color: var(--ink); }
+.weather-place-list { display: flex; flex-direction: column; margin-top: 0.4rem; }
+.weather-place-option {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    padding: 0.5rem 0.2rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    font-size: 1.05rem;
+    text-align: left;
+    animation: slideUp var(--t-mid) var(--ease-out) both;
+    transition: transform var(--t-mid) var(--ease-out), opacity var(--t-fast);
+}
+.weather-place-option:hover { transform: translateX(4px); opacity: 0.7; }
+.weather-place-region { font-size: 0.85rem; font-style: italic; color: var(--muted); }
+
 .status { text-align: center; color: var(--muted); font-size: 0.8rem; padding: 2.5rem 1rem; letter-spacing: 0.04em; animation: fadeIn var(--t-mid) ease both; }
 .status.loading::after { content: ''; display: inline-block; width: 1em; text-align: left; animation: dots 1.2s steps(4) infinite; }
 .sentinel { height: 1px; }

@@ -204,7 +204,7 @@ function createdFromId(id) {
 const query = { text: '', refs: [], negs: [] };   // refs/negs: { key, src, id?, b64? }
 const hiddenIds = new Set(store.get('glane.hidden', []));
 
-let view = 'empty';            // 'empty' | 'results' | 'collection'
+let view = 'empty';            // 'empty' | 'results' | 'collection' | 'shared' | 'weather'
 let viewingId = null;          // collection shown in the main area
 let renderGen = 0;             // bumps on every view change; stale async work checks it
 const results = { request: null, offset: 0, hasMore: false, items: [], loadingGen: null };
@@ -930,6 +930,7 @@ function showView(name) {
     document.body.classList.toggle('is-landing', name === 'empty');
     $('view-header').hidden = name !== 'collection';
     $('shared-header').hidden = name !== 'shared';
+    $('weather-header').hidden = name !== 'weather';
     $('recos').hidden = true;
     if (name !== 'collection') viewingId = null;
     renderSidebarCollections();
@@ -979,7 +980,7 @@ async function loadPage(gen) {
 }
 
 function maybeLoadMore() {
-    if (view !== 'results' || !results.hasMore || results.loadingGen === renderGen) return;
+    if ((view !== 'results' && view !== 'weather') || !results.hasMore || results.loadingGen === renderGen) return;
     if ($('sentinel').getBoundingClientRect().top < window.innerHeight + 800) loadPage(renderGen);
 }
 
@@ -1927,7 +1928,7 @@ const Landing = {
 
     async init() {
         const params = new URLSearchParams(location.search);
-        if (params.has('q') || params.has('ref') || params.has('c')) { this.finish(); return; }   // arriving on a search or a shared collection
+        if (params.has('q') || params.has('ref') || params.has('c') || params.has('meteo')) { this.finish(); return; }   // arriving on a search or a shared collection
         try {
             this.data = await (await fetch('landing.json')).json();
         } catch (err) {
