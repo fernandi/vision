@@ -139,7 +139,25 @@ def health_check():
         "env": ENV,
         "indexed": n,
         "load_error": search_engine.load_error,
+        "memory_mb": _memory_breakdown(),
     }
+
+
+def _memory_breakdown():
+    """Process memory vs Linux page cache: hosts often bill both as "memory"."""
+    out = {}
+    try:
+        with open("/proc/self/status") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    out["process_rss"] = int(line.split()[1]) // 1024
+        with open("/sys/fs/cgroup/memory.stat") as f:
+            stat = dict(line.split() for line in f)
+        out["container_anon"] = int(stat.get("anon", 0)) // 2**20
+        out["container_file_cache"] = int(stat.get("file", 0)) // 2**20
+    except (OSError, ValueError):
+        pass   # not Linux / no cgroup v2 (local development)
+    return out
 
 @app.post("/search")
 def search(req: SearchRequest):
