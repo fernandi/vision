@@ -159,9 +159,35 @@ class VisualSearchEngine:
         self._load_metadata()
         self._build_denylist()
         self._compute_corpus_mean()
+        self._release_page_cache()
 
         n_indexed = self.index.ntotal
         print(f"Search Engine Ready. ({n_indexed} images indexed)")
+
+    def _release_page_cache(self):
+        """Drop downloaded files (index, model weights) from the Linux page cache
+        once they are loaded in memory. Hosts such as Railway bill that cache as
+        memory (~2 GB here) although nothing reads the files again."""
+        if not hasattr(os, "posix_fadvise"):
+            return
+        roots = [self.data_dir, os.environ.get("HF_HOME") or os.path.expanduser("~/.cache/huggingface")]
+        released = 0
+        for root in roots:
+            for folder, _, files in os.walk(root):
+                for name in files:
+                    path = os.path.join(folder, name)
+                    try:
+                        if os.path.islink(path) or os.path.getsize(path) < 10 * 2**20:
+                            continue
+                        fd = os.open(path, os.O_RDONLY)
+                        try:
+                            os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
+                            released += os.path.getsize(path)
+                        finally:
+                            os.close(fd)
+                    except OSError:
+                        continue
+        print(f"  ✓ page cache released for {released / 2**20:.0f} MB of loaded files")
 
     def _compute_corpus_mean(self, n_sample: int = 500):
         """
