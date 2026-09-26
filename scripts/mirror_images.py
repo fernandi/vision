@@ -108,8 +108,10 @@ def render(data):
 class DirStore:
     def __init__(self, root):
         self.root = root
+        self.bytes = 0
 
     def put(self, key, data):
+        self.bytes += len(data)
         path = os.path.join(self.root, *key.split("/"))
         os.makedirs(os.path.dirname(path), exist_ok=True)
         tmp = path + ".tmp"
@@ -121,10 +123,14 @@ class DirStore:
 class S3Store:
     def __init__(self, bucket, prefix):
         import boto3
-        self.client = boto3.client("s3", endpoint_url=os.environ.get("S3_ENDPOINT_URL"))
+        from botocore.config import Config
+        self.client = boto3.client("s3", endpoint_url=os.environ.get("S3_ENDPOINT_URL"), region_name="auto",
+                                   config=Config(max_pool_connections=32, retries={"max_attempts": 8, "mode": "adaptive"}))
         self.bucket, self.prefix = bucket, prefix.strip("/")
+        self.bytes = 0
 
     def put(self, key, data):
+        self.bytes += len(data)
         self.client.put_object(
             Bucket=self.bucket, Key=f"{self.prefix}/{key}" if self.prefix else key, Body=data,
             ContentType="image/webp", CacheControl="public, max-age=31536000, immutable")
@@ -205,6 +211,7 @@ def main():
     done = set(json.load(open(done_path))) if os.path.exists(done_path) else set()
     id_map = load_id_map(args.state, args.mapping, args.index_repo)
     store = open_store(args.out)
+    started = time.time()
 
     with ProcessPoolExecutor(args.workers) as encoders, ThreadPoolExecutor(16) as uploaders:
         for n in parse_shards(args.shards):
@@ -228,6 +235,12 @@ def main():
                 json.dump(sorted(done), f)
             print(f"shard {n:02d}: {len(stats['written'])} written, {stats['unindexed']} not in the index, "
                   f"{stats['failed']} unreadable, {time.time() - t0:.0f}s", flush=True)
+
+    # Resource use of this run (encoder processes included), to check hosting costs.
+    t = os.times()
+    cpu = t.user + t.system + t.children_user + t.children_system
+    print(f"usage: {time.time() - started:.0f}s wall, {cpu:.0f} CPU-seconds, "
+          f"{store.bytes / 1e9:.3f} GB written", flush=True)
 
     written = set()
     for name in os.listdir(args.state):
