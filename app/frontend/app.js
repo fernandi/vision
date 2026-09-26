@@ -47,7 +47,7 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 const itemKey = it => (it.id != null ? `id:${it.id}` : `src:${it.src}`);
 const clampRatio = r => Math.min(MAX_RATIO, Math.max(MIN_RATIO, r || 1));
 const museumName = source => MUSEUMS[source] || source || '';
-const countLabel = n => `${n} image${n === 1 ? '' : 's'}`;
+const countLabel = n => t(n === 1 ? 'count.one' : 'count.many', { n });
 const cssUrl = src => `url("${encodeURI(src)}")`;
 
 function toItem(r) {
@@ -60,7 +60,7 @@ function toItem(r) {
         hd: r.image_url || '',                    // full page
         orig: r.original_url || '',               // museum file, used if a copy is missing
         url: r.URL || '',
-        title: r.Title || 'Untitled',
+        title: r.Title || t('untitled'),
         author: r.Author && r.Author !== 'N/A' ? r.Author : '',
         source: r.source || '',
         members,
@@ -173,7 +173,7 @@ const Collections = {
     },
     create(name) {
         const now = Date.now();
-        const c = { id: uid(), name: name || `Collection ${this.data.list.length + 1}`, items: [], createdAt: now, updatedAt: now, coverKey: null };
+        const c = { id: uid(), name: name || t('collections.defaultName', { n: this.data.list.length + 1 }), items: [], createdAt: now, updatedAt: now, coverKey: null };
         this.data.list.push(c);
         this.touch(c.id);
         return c;
@@ -360,7 +360,7 @@ function createCard(item, ratio, grid, mode, batchIndex = 0) {
     const frame = el('button', 'card-img');
     frame.type = 'button';
     frame.style.aspectRatio = `1 / ${ratio}`;
-    frame.setAttribute('aria-label', `Open ${item.title}`);
+    frame.setAttribute('aria-label', t('card.open', { title: item.title }));
     const img = new Image();
     img.src = item.src;
     img.alt = item.title;
@@ -382,7 +382,7 @@ function createCard(item, ratio, grid, mode, batchIndex = 0) {
 
     if (item.members) {
         const badge = el('span', 'card-similar', `+${item.members.length - 1}`);
-        badge.appendChild(el('span', 'card-similar-label', ' SIMILAR'));
+        badge.appendChild(el('span', 'card-similar-label', t('card.similar')));
         card.appendChild(badge);
     }
 
@@ -391,8 +391,8 @@ function createCard(item, ratio, grid, mode, batchIndex = 0) {
     if (grid === mainGrid && view === 'results') {
         const hideBtn = el('button', 'card-icon-btn');
         hideBtn.type = 'button';
-        hideBtn.title = 'Not interested';
-        hideBtn.setAttribute('aria-label', 'Not interested');
+        hideBtn.title = t('card.hide');
+        hideBtn.setAttribute('aria-label', t('card.hide'));
         hideBtn.innerHTML = ICON.hide;
         hideBtn.addEventListener('click', e => { e.stopPropagation(); showHideOverlay(card, grid); });
         top.appendChild(hideBtn);
@@ -416,17 +416,17 @@ function createCard(item, ratio, grid, mode, batchIndex = 0) {
     collectBtn.addEventListener('click', e => { e.stopPropagation(); onCollectClick(card); });
     const chevron = el('button', 'card-btn card-chevron', '▾');
     chevron.type = 'button';
-    chevron.title = 'Choose a collection';
-    chevron.setAttribute('aria-label', 'Choose a collection');
+    chevron.title = t('card.chooser');
+    chevron.setAttribute('aria-label', t('card.chooser'));
     chevron.setAttribute('aria-haspopup', 'menu');
     chevron.addEventListener('click', e => { e.stopPropagation(); openPicker(chevron, item, img); });
     split.append(collectBtn, chevron);
 
     const visualBtn = el('button', 'card-btn');
     visualBtn.type = 'button';
-    visualBtn.title = 'Start a visual search from this image';
-    visualBtn.setAttribute('aria-label', 'Visual research');
-    visualBtn.innerHTML = `${ICON.visual}<span class="card-btn-label">VISUAL RESEARCH</span>`;
+    visualBtn.title = t('card.visual.title');
+    visualBtn.setAttribute('aria-label', t('card.visual'));
+    visualBtn.innerHTML = `${ICON.visual}<span class="card-btn-label">${t('card.visual')}</span>`;
     visualBtn.addEventListener('click', e => { e.stopPropagation(); visualResearch(item); });
     actions.append(split, visualBtn);
     bottom.appendChild(actions);
@@ -448,9 +448,9 @@ function paintCollectButton(card) {
     const on = Collections.contains(cid, card._item);
     const target = Collections.get(cid);
     btn.classList.toggle('on', on);
-    btn.innerHTML = `${on ? ICON.collected : ICON.collect}<span class="card-btn-label">${on ? 'COLLECTED' : 'COLLECT'}</span>`;
-    btn.title = on ? `In “${target.name}”: remove or move`
-        : target ? `Add to “${target.name}”` : 'Add to a new collection';
+    btn.innerHTML = `${on ? ICON.collected : ICON.collect}<span class="card-btn-label">${on ? t('card.collected') : t('card.collect')}</span>`;
+    btn.title = on ? t('card.inCollection', { name: target.name })
+        : target ? t('card.addTo', { name: target.name }) : t('card.addToNew');
     btn.setAttribute('aria-label', btn.title);
 
     const coverBtn = card.querySelector('.card-cover');
@@ -458,7 +458,7 @@ function paintCollectButton(card) {
         const c = Collections.get(viewingId);
         const isCover = Boolean(c) && itemKey(Collections.cover(c) || {}) === itemKey(card._item);
         coverBtn.classList.toggle('on', isCover);
-        coverBtn.title = isCover ? 'Collection cover' : 'Use as collection cover';
+        coverBtn.title = isCover ? t('card.cover') : t('card.useAsCover');
         coverBtn.setAttribute('aria-label', coverBtn.title);
     }
 }
@@ -476,7 +476,7 @@ function setCover(item) {
     Collections.setCover(c.id, item);
     repaintAll();
     bumpRow(c.id);
-    toast(`Cover of “${c.name}” updated`);
+    toast(t('toast.cover', { name: c.name }));
 }
 
 function onCollectClick(card) {
@@ -493,8 +493,8 @@ function onCollectClick(card) {
 function collectInto(cid, item, fromImg) {
     if (!Collections.add(cid, item)) return;
     const c = Collections.get(cid);
-    toast(`Added to “${c.name}”`, {
-        label: 'UNDO',
+    toast(t('toast.added', { name: c.name }), {
+        label: t('toast.undo'),
         run: () => { Collections.removeItem(cid, item); afterRemoval(item, cid); repaintAll(); },
     });
     repaintAll();
@@ -526,7 +526,7 @@ function afterRemoval(item, cid) {
     if (view === 'collection' && viewingId === cid) {
         const card = mainGrid.cardFor(item);
         if (card) mainGrid.remove(card);
-        if (!Collections.get(cid).items.length) setStatus(statusEl, 'Empty for now. Use COLLECT on any image to add it here.');
+        if (!Collections.get(cid).items.length) setStatus(statusEl, t('status.collectionEmpty'));
     }
 }
 
@@ -560,21 +560,21 @@ function showHideOverlay(card, grid) {
     const overlay = el('div', 'hide-overlay');
     overlay.innerHTML = `
         <div class="hide-overlay-top">
-            <span class="sb-label">NOT INTERESTED</span>
-            <button type="button" class="link-btn" data-action="cancel">CANCEL</button>
+            <span class="sb-label">${t('hide.title')}</span>
+            <button type="button" class="link-btn" data-action="cancel">${t('hide.cancel')}</button>
         </div>
         <div class="hide-options">
             <button type="button" class="hide-option" data-action="negative">
-                <span class="ho-title">Use as negative</span>
-                <span class="ho-desc">Steer the search away from this image</span>
+                <span class="ho-title">${t('hide.negative')}</span>
+                <span class="ho-desc">${t('hide.negative.desc')}</span>
             </button>
             <button type="button" class="hide-option" data-action="taste">
-                <span class="ho-title">Not my taste</span>
-                <span class="ho-desc">Never show it to me again</span>
+                <span class="ho-title">${t('hide.taste')}</span>
+                <span class="ho-desc">${t('hide.taste.desc')}</span>
             </button>
             <button type="button" class="hide-option" data-action="flag">
-                <span class="ho-title">WTF flag</span>
-                <span class="ho-desc">Report an irrelevant image to the team</span>
+                <span class="ho-title">${t('hide.flag')}</span>
+                <span class="ho-desc">${t('hide.flag.desc')}</span>
             </button>
         </div>`;
     overlay.addEventListener('click', e => {
@@ -606,7 +606,7 @@ function openPicker(anchor, item, fromImg) {
     closePicker(true);
     pickerAnchor = anchor;
     anchor.setAttribute('aria-expanded', 'true');
-    picker.replaceChildren(el('div', 'picker-label', item ? 'COLLECT INTO' : 'NEW IMAGES GO INTO'));
+    picker.replaceChildren(el('div', 'picker-label', item ? t('picker.collectInto') : t('picker.newGoInto')));
 
     const row = (c, i) => {
         const btn = el('button', 'picker-item');
@@ -624,7 +624,7 @@ function openPicker(anchor, item, fromImg) {
             closePicker();
             setTarget(c.id, !item);
             if (item) {
-                if (Collections.contains(c.id, item)) toast(`Already in “${c.name}”`);
+                if (Collections.contains(c.id, item)) toast(t('toast.already', { name: c.name }));
                 else collectInto(c.id, item, fromImg);
             }
         });
@@ -638,14 +638,14 @@ function openPicker(anchor, item, fromImg) {
     create.style.setProperty('--i', Collections.all().length);
     const plus = el('span', 'picker-cover', '+');
     const text = el('span', 'picker-text');
-    text.append(el('span', 'picker-name', 'New collection'));
+    text.append(el('span', 'picker-name', t('picker.new')));
     create.append(plus, text);
     create.addEventListener('click', () => {
         closePicker();
         const c = Collections.create();
         setTarget(c.id, false);
         if (item) collectInto(c.id, item, fromImg);
-        else toast(`New images now go into “${c.name}”`);
+        else toast(t('toast.target', { name: c.name }));
     });
     picker.appendChild(create);
 
@@ -679,7 +679,7 @@ window.addEventListener('scroll', () => closePicker(), { passive: true });
 function setTarget(id, announce) {
     if (Collections.data.activeId === id) return;
     Collections.setActive(id);
-    if (announce) toast(`New images now go into “${Collections.get(id).name}”`);
+    if (announce) toast(t('toast.target', { name: Collections.get(id).name }));
     repaintAll();
 }
 
@@ -718,13 +718,13 @@ function openItemDialog(item, fromId) {
         thumb.src = item.src;
         thumb.alt = '';
         const text = el('div');
-        text.append(el('div', 'dialog-title', item.title), el('div', 'dialog-text', `In “${from.name}”. What do you want to do?`));
+        text.append(el('div', 'dialog-title', item.title), el('div', 'dialog-text', t('dialog.in', { name: from.name })));
         head.append(thumb, text);
         d.appendChild(head);
 
         const others = Collections.all().filter(c => c.id !== fromId);
         const section = el('div', 'dialog-section');
-        section.appendChild(el('div', 'dialog-label', 'MOVE TO'));
+        section.appendChild(el('div', 'dialog-label', t('dialog.moveTo')));
         const list = el('div', 'dialog-list');
         others.forEach((c, i) => {
             const b = el('button', 'picker-item');
@@ -735,7 +735,7 @@ function openItemDialog(item, fromId) {
             const t = el('span', 'picker-text');
             t.append(el('span', 'picker-name', c.name), el('span', 'picker-meta', countLabel(c.items.length)));
             b.append(cover, t);
-            if (Collections.contains(c.id, item)) b.appendChild(el('span', 'picker-mark', 'already in'));
+            if (Collections.contains(c.id, item)) b.appendChild(el('span', 'picker-mark', t('picker.alreadyIn')));
             b.addEventListener('click', () => { moveItem(item, fromId, c.id); closeDialog(); });
             list.appendChild(b);
         });
@@ -743,7 +743,7 @@ function openItemDialog(item, fromId) {
         create.type = 'button';
         create.style.setProperty('--i', others.length);
         const t = el('span', 'picker-text');
-        t.append(el('span', 'picker-name', 'New collection'));
+        t.append(el('span', 'picker-name', t('picker.new')));
         create.append(el('span', 'picker-cover', '+'), t);
         create.addEventListener('click', () => { const c = Collections.create(); moveItem(item, fromId, c.id); closeDialog(); });
         list.appendChild(create);
@@ -752,8 +752,8 @@ function openItemDialog(item, fromId) {
 
         const foot = el('div', 'dialog-foot');
         foot.append(
-            dialogButton('CANCEL', 'link-btn', closeDialog),
-            dialogButton('REMOVE FROM COLLECTION', 'pill-btn danger-btn', () => { removeItem(item, fromId); closeDialog(); }),
+            dialogButton(t('dialog.cancel'), 'link-btn', closeDialog),
+            dialogButton(t('dialog.remove'), 'pill-btn danger-btn', () => { removeItem(item, fromId); closeDialog(); }),
         );
         d.appendChild(foot);
     });
@@ -763,8 +763,8 @@ function removeItem(item, cid) {
     const idx = Collections.removeItem(cid, item);
     afterRemoval(item, cid);
     repaintAll();
-    toast(`Removed from “${Collections.get(cid).name}”`, {
-        label: 'UNDO',
+    toast(t('toast.removed', { name: Collections.get(cid).name }), {
+        label: t('toast.undo'),
         run: () => { Collections.insertAt(cid, item, idx); restoreInView(item, cid); repaintAll(); },
     });
 }
@@ -774,8 +774,8 @@ function moveItem(item, fromId, toId) {
     const added = Collections.add(toId, item);
     afterRemoval(item, fromId);
     repaintAll();
-    toast(`Moved to “${Collections.get(toId).name}”`, {
-        label: 'UNDO',
+    toast(t('toast.moved', { name: Collections.get(toId).name }), {
+        label: t('toast.undo'),
         run: () => {
             if (added) Collections.removeItem(toId, item);
             Collections.insertAt(fromId, item, idx);
@@ -798,7 +798,7 @@ function confirmDialog({ title, text, confirm, danger = false }) {
             d.append(el('div', 'dialog-title', title), el('div', 'dialog-text', text));
             const foot = el('div', 'dialog-foot');
             foot.append(
-                dialogButton('CANCEL', 'link-btn', () => { closeDialog(); resolve(false); }),
+                dialogButton(t('dialog.cancel'), 'link-btn', () => { closeDialog(); resolve(false); }),
                 dialogButton(confirm, danger ? 'pill-btn danger-btn' : 'pill-btn', () => { closeDialog(); resolve(true); }),
             );
             d.appendChild(foot);
@@ -817,7 +817,7 @@ function renderChips() {
         img.alt = negative ? 'Negative reference' : 'Reference image';
         const rm = el('button', 'chip-remove', '×');
         rm.type = 'button';
-        rm.setAttribute('aria-label', 'Remove image');
+        rm.setAttribute('aria-label', t('search.removeImage'));
         rm.addEventListener('click', () => {
             const list = negative ? query.negs : query.refs;
             list.splice(list.indexOf(ref), 1);
@@ -831,6 +831,7 @@ function renderChips() {
     query.negs.forEach(r => add(r, true));
     $('negative-settings').hidden = !query.negs.length;
     updateClearButton();
+    updateSettingsUI();
 }
 
 function refFromItem(item) {
@@ -838,7 +839,7 @@ function refFromItem(item) {
 }
 
 function addReference(item, negative = false) {
-    if (item.id == null) { toast('This image can’t be used for search'); return false; }
+    if (item.id == null) { toast(t('toast.noSearchImage')); return false; }
     const list = negative ? query.negs : query.refs;
     const other = negative ? query.refs : query.negs;
     const key = itemKey(item);
@@ -870,7 +871,7 @@ async function addFiles(files) {
     if (!images.length) return;
     for (const f of images) {
         try { query.refs.push(await fileToRef(f)); }
-        catch (err) { console.error('image file', err); toast('This image could not be read'); }
+        catch (err) { console.error('image file', err); toast(t('toast.unreadable')); }
     }
     renderChips();
     runSearch();
@@ -879,7 +880,7 @@ async function addFiles(files) {
 // ── Search & pagination ─────────────────────────────────────────────────────
 function currentSettings() {
     return {
-        diversity: $('diversity-toggle').getAttribute('aria-pressed') === 'true' ? 0.5 : 0.0,
+        diversity: Number(document.querySelector('input[name="variety"]:checked').value),
         combination_mode: document.querySelector('input[name="combination-mode"]:checked').value,
         negative_mode: document.querySelector('input[name="negative-mode"]:checked').value,
     };
@@ -938,7 +939,7 @@ function runSearch() {
 async function loadPage(gen) {
     if (!results.hasMore || results.loadingGen === gen) return;
     results.loadingGen = gen;
-    if (results.offset > 0) setStatus(statusEl, 'Loading', true);
+    if (results.offset > 0) setStatus(statusEl, t('status.loading'), true);
     try {
         const data = await postJSON('/search', { ...results.request, offset: results.offset });
         if (gen !== renderGen) return;
@@ -947,12 +948,12 @@ async function loadPage(gen) {
         const list = data.results.map(toItem).filter(it => !hiddenIds.has(it.id));
         await fillGrid(mainGrid, list, gen, 'results', it => results.items.push(it));
         if (gen !== renderGen) return;
-        setStatus(statusEl, mainGrid.items.length ? (results.hasMore ? '' : 'End of results') : 'No results');
+        setStatus(statusEl, mainGrid.items.length ? (results.hasMore ? '' : t('status.end')) : t('status.none'));
     } catch (err) {
         console.error(err);
         if (gen === renderGen) {
             if (mainGrid.hasSkeleton) mainGrid.reset();
-            setStatus(statusEl, `${err.message} — try again`);
+            setStatus(statusEl, t('status.error'));
         }
         results.hasMore = false;
     } finally {
@@ -977,7 +978,7 @@ function backToResults() {
     const previous = results.items;
     results.items = [];
     fillGrid(mainGrid, previous, gen, 'results', it => results.items.push(it)).then(done => {
-        if (done) setStatus(statusEl, results.hasMore ? '' : 'End of results');
+        if (done) setStatus(statusEl, results.hasMore ? '' : t('status.end'));
     });
 }
 
@@ -1062,7 +1063,7 @@ function acceptsItemDrop(node, onDrop) {
 
 function dropIntoCollection(cid, item) {
     const c = Collections.get(cid);
-    if (Collections.contains(cid, item)) { toast(`Already in “${c.name}”`); bumpRow(cid); return; }
+    if (Collections.contains(cid, item)) { toast(t('toast.already', { name: c.name })); bumpRow(cid); return; }
     collectInto(cid, item, null);
 }
 
@@ -1074,7 +1075,7 @@ function buildCollectionRow(c) {
     const cover = el('span', 'collection-cover');
     const text = el('span', 'collection-text');
     text.append(
-        el('span', 'collection-kicker', 'COLLECTING INTO'),
+        el('span', 'collection-kicker', t('collections.kicker')),
         el('span', 'collection-title'),
         el('span', 'collection-meta'),
     );
@@ -1101,14 +1102,14 @@ function renderSidebarCollections() {
         li.classList.toggle('is-viewing', view === 'collection' && c.id === viewingId);
         li.querySelector('.collection-title').textContent = c.name;
         li.querySelector('.collection-meta').textContent = countLabel(c.items.length);
-        li.querySelector('.collection-item').title = isTarget ? `Open “${c.name}”` : `Open “${c.name}” and collect into it`;
+        li.querySelector('.collection-item').title = isTarget ? t('collections.open', { name: c.name }) : t('collections.openAndTarget', { name: c.name });
         const cover = Collections.cover(c);
         li.querySelector('.collection-cover').style.backgroundImage = cover ? cssUrl(cover.src) : '';
     });
     existing.forEach(li => li.remove());
 
     if (!Collections.all().length) {
-        list.appendChild(el('li', 'collection-empty', 'No collection yet. Collect an image, or drag it here.'));
+        list.appendChild(el('li', 'collection-empty', t('collections.empty')));
     }
 }
 
@@ -1132,11 +1133,11 @@ function openCollection(id) {
     $('collection-search-btn').disabled = !c.items.some(i => i.id != null);
     const gen = renderGen;
     if (!c.items.length) {
-        setStatus(statusEl, 'Empty for now. Use COLLECT on any image to add it here.');
+        setStatus(statusEl, t('status.collectionEmpty'));
     } else {
         mainGrid.skeleton(Math.min(c.items.length, 8));
         fillGrid(mainGrid, c.items, gen, 'collection').then(done => {
-            if (done && !mainGrid.items.length) setStatus(statusEl, 'These images can no longer be displayed.');
+            if (done && !mainGrid.items.length) setStatus(statusEl, t('status.collectionGone'));
         });
     }
     loadRecos(c, gen);
@@ -1148,7 +1149,7 @@ async function loadRecos(c, gen) {
     const recosStatus = $('recos-status');
     if (!refs.length) { section.hidden = true; return; }
     section.hidden = false;
-    $('recos-sub').textContent = `Found automatically from ${refs.length === c.items.length ? 'the' : 'the latest'} ${countLabel(refs.length)} of this collection.`;
+    $('recos-sub').textContent = t(refs.length === c.items.length ? 'recos.sub' : 'recos.subLatest', { count: countLabel(refs.length) });
     setStatus(recosStatus, '');
 
     const s = currentSettings();
@@ -1169,7 +1170,7 @@ async function loadRecos(c, gen) {
             recosCache.set(signature, list);
         } catch (err) {
             console.error(err);
-            if (gen === renderGen) { recosGrid.reset(); setStatus(recosStatus, 'Suggestions are unavailable right now.'); }
+            if (gen === renderGen) { recosGrid.reset(); setStatus(recosStatus, t('recos.unavailable')); }
             return;
         }
     }
@@ -1177,7 +1178,7 @@ async function loadRecos(c, gen) {
     const inCollection = new Set(c.items.map(itemKey));
     const fresh = list.filter(it => !inCollection.has(itemKey(it)) && !hiddenIds.has(it.id));
     const done = await fillGrid(recosGrid, fresh, gen, 'results');
-    if (done && !recosGrid.items.length) setStatus(recosStatus, 'No suggestions for now.');
+    if (done && !recosGrid.items.length) setStatus(recosStatus, t('recos.none'));
 }
 
 function searchWithCollection() {
@@ -1189,7 +1190,7 @@ function searchWithCollection() {
     searchInput.value = '';
     renderChips();
     runSearch();
-    if (c.items.length > usable.length) toast(`Searching with the latest ${usable.length} images`);
+    if (c.items.length > usable.length) toast(t('toast.latest', { n: usable.length }));
 }
 
 $('new-collection-btn').addEventListener('click', () => {
@@ -1204,9 +1205,9 @@ $('collection-zip-btn').addEventListener('click', async e => {
     const btn = e.currentTarget;
     const c = Collections.get(viewingId);
     const ids = c.items.filter(i => i.id != null).map(i => i.id);
-    if (!ids.length) { toast('No image to download'); return; }
+    if (!ids.length) { toast(t('toast.noZip')); return; }
     btn.disabled = true;
-    btn.textContent = 'PREPARING ZIP…';
+    btn.textContent = t('view.zipPreparing');
     try {
         const resp = await fetch(`${API}/collection-zip`, {
             method: 'POST',
@@ -1223,13 +1224,13 @@ $('collection-zip-btn').addEventListener('click', async e => {
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 30000);
-        toast(missing ? `Zip ready. ${missing} image${missing > 1 ? 's' : ''} could not be downloaded.` : 'Zip ready');
+        toast(missing ? t('toast.zipMissing', { n: missing }) : t('toast.zipReady'));
     } catch (err) {
         console.error(err);
-        toast('The zip could not be prepared. Please try again.');
+        toast(t('toast.zipFailed'));
     } finally {
         btn.disabled = false;
-        btn.textContent = 'DOWNLOAD ZIP';
+        btn.textContent = t('view.zip');
     }
 });
 
@@ -1247,14 +1248,14 @@ $('collection-delete-btn').addEventListener('click', async () => {
     const c = Collections.get(viewingId);
     if (!c) return;
     const ok = await confirmDialog({
-        title: `Delete “${c.name}”?`,
-        text: c.items.length ? `Its ${countLabel(c.items.length)} will be removed from your collections. This can’t be undone.` : 'This collection is empty.',
-        confirm: 'DELETE COLLECTION',
+        title: t('dialog.deleteTitle', { name: c.name }),
+        text: c.items.length ? t('dialog.deleteText', { count: countLabel(c.items.length) }) : t('dialog.deleteEmpty'),
+        confirm: t('dialog.deleteConfirm'),
         danger: true,
     });
     if (!ok) return;
     Collections.remove(c.id);
-    toast(`“${c.name}” deleted`);
+    toast(t('toast.deleted', { name: c.name }));
     backToResults();
 });
 
@@ -1296,7 +1297,7 @@ function paintLightboxActions() {
     const target = Collections.active();
     const collect = $('lb-collect');
     collect.classList.toggle('on', Boolean(target) && Collections.contains(target.id, lbItem));
-    collect.title = target ? `Collect into “${target.name}”` : 'Collect into a new collection';
+    collect.title = target ? t('lb.collectInto', { name: target.name }) : t('lb.collectNew');
 
     // Choosing a cover only makes sense while browsing a collection.
     const coverBtn = $('lb-cover');
@@ -1305,7 +1306,7 @@ function paintLightboxActions() {
     if (!coverBtn.hidden) {
         const isCover = itemKey(Collections.cover(c) || {}) === itemKey(lbItem);
         coverBtn.classList.toggle('on', isCover);
-        coverBtn.textContent = isCover ? 'COVER' : 'SET AS COVER';
+        coverBtn.textContent = isCover ? t('lb.isCover') : t('lb.cover');
     }
 }
 
@@ -1335,7 +1336,7 @@ function showInLightbox(item, withSimilar, direction) {
     const museum = $('lb-museum');
     museum.textContent = museumName(item.source);
     if (item.url) museum.href = item.url; else museum.removeAttribute('href');
-    museum.title = item.url ? 'See this artwork on the museum website' : '';
+    museum.title = item.url ? t('lb.museum') : '';
     $('lb-download').href = fullImage(item);
     paintLightboxActions();
     $('lb-prev').disabled = lbIndex <= 0;
@@ -1350,7 +1351,7 @@ async function loadSimilar(item) {
     strip.replaceChildren();
     box.hidden = !item.members;
     if (!item.members) return;
-    $('lb-similar-label').textContent = `${item.members.length - 1} SIMILAR`;
+    $('lb-similar-label').textContent = t('lb.similar', { n: item.members.length - 1 });
     try {
         const data = await postJSON('/cluster-members', { faiss_ids: item.members });
         if (gen !== lbSimilarGen) return;
@@ -1461,13 +1462,31 @@ $('settings-toggle').addEventListener('click', e => {
     e.currentTarget.setAttribute('aria-expanded', String(open));
     $('settings-panel').classList.toggle('open', open);
 });
-$('diversity-toggle').addEventListener('click', e => {
-    const on = e.currentTarget.getAttribute('aria-pressed') !== 'true';
-    e.currentTarget.setAttribute('aria-pressed', String(on));
-    if (view === 'results') runSearch();
-});
-document.querySelectorAll('input[name="combination-mode"], input[name="negative-mode"]').forEach(r =>
-    r.addEventListener('change', () => { if (view === 'results') runSearch(); }));
+// Each choice explains itself; the heading sums up what is active.
+const VARIETY_KEYS = { '0': 'close', '0.3': 'balanced', '0.6': 'varied' };
+const checkedValue = name => document.querySelector(`input[name="${name}"]:checked`).value;
+
+function updateSettingsUI() {
+    const variety = VARIETY_KEYS[checkedValue('variety')];
+    const mode = checkedValue('combination-mode');
+    const neg = checkedValue('negative-mode');
+    // Combining only means something with at least two elements (words + image, or two images).
+    const elements = (searchInput.value.trim() ? 1 : 0) + query.refs.length;
+    const locked = elements < 2;
+    $('combine-group').classList.toggle('is-locked', locked);
+    $('combine-group').querySelectorAll('input').forEach(i => { i.disabled = locked; });
+    $('combine-locked').hidden = !locked;
+    $('variety-help').textContent = t(`settings.variety.${variety}.help`);
+    $('negative-help').textContent = t(`neg.${neg}.help`);
+    const parts = [t(`settings.variety.${variety}`)];
+    if (!locked) parts.push(t(`mode.${mode}`));
+    if (query.negs.length) parts.push(t(`neg.${neg}`));
+    $('settings-summary').textContent = parts.join(' · ');
+}
+
+document.querySelectorAll('input[name="variety"], input[name="combination-mode"], input[name="negative-mode"]').forEach(r =>
+    r.addEventListener('change', () => { updateSettingsUI(); if (view === 'results') runSearch(); }));
+searchInput.addEventListener('input', updateSettingsUI);
 
 // ── Mobile menu ─────────────────────────────────────────────────────────────
 function closeMenu() {
@@ -1514,11 +1533,6 @@ const fromServer = c => ({
     id: c.id, name: c.name, createdAt: c.created_at, updatedAt: c.updated_at, coverKey: c.cover_key, items: c.items,
 });
 
-const SYNC_TEXT = {
-    pending: 'Saving…',
-    saved: 'All changes are saved to your account.',
-    offline: 'Offline. Changes will be saved as soon as the connection is back.',
-};
 
 const Sync = {
     email: null,
@@ -1546,7 +1560,7 @@ const Sync = {
         this.setState('pending');
         this.timer = setTimeout(() => this.flush(), delay);
     },
-    setState(state) { $('sync-status').textContent = SYNC_TEXT[state]; },
+    setState(state) { $('sync-status').textContent = t(`sync.${state}`); },
 
     async flush(keepalive = false) {
         if (!this.on) return;
@@ -1622,7 +1636,7 @@ const Sync = {
         this.dirty.clear();
         this.deleted.clear();
         renderAccount();
-        toast('Your session has ended. Sign in again to keep saving your collections.');
+        toast(t('toast.sessionEnded'));
     },
 };
 
@@ -1631,9 +1645,7 @@ function renderAccount() {
     $('account-in').hidden = !Sync.on;
     $('account-email').textContent = Sync.email || '';
     $('auth-form').hidden = !Sync.available;
-    $('account-intro').textContent = Sync.available
-        ? 'Sign in with your email to keep your collections on every device. No password: we send you a link.'
-        : 'Accounts are coming soon. For now, collections are kept in this browser.';
+    $('account-intro').textContent = Sync.available ? t('account.intro') : t('account.soon');
 }
 
 function showAuthStatus(text, extraLink = null) {
@@ -1654,17 +1666,17 @@ $('auth-form').addEventListener('submit', async e => {
     const email = $('auth-email').value.trim();
     const btn = $('auth-btn');
     btn.disabled = true;
-    btn.textContent = 'SENDING…';
+    btn.textContent = t('account.sending');
     try {
         const res = await api('/auth/request', { method: 'POST', body: { email } });
-        showAuthStatus(`Check your inbox: a sign-in link is on its way to ${email}. It works once, for 15 minutes.`,
-            res.dev_outbox ? { label: 'Open the dev outbox', href: res.dev_outbox } : null);
+        showAuthStatus(t('account.sent', { email }),
+            res.dev_outbox ? { label: t('account.devOutbox'), href: res.dev_outbox } : null);
     } catch (err) {
         console.error(err);
-        showAuthStatus(err.status === 503 ? 'Sign-in is not available yet.' : (err.message || 'The link could not be sent. Please try again.'));
+        showAuthStatus(t({ 503: 'account.unavailable', 400: 'account.invalid', 422: 'account.invalid', 429: 'account.tooMany' }[err.status] || 'account.failed'));
     } finally {
         btn.disabled = false;
-        btn.textContent = 'SEND LINK';
+        btn.textContent = t('account.send');
     }
 });
 
@@ -1678,7 +1690,7 @@ $('logout-btn').addEventListener('click', async () => {
     renderAccount();
     if (view === 'collection') backToResults();
     repaintAll();
-    toast('Signed out. Your collections are safe in your account.');
+    toast(t('toast.signedOut'));
 });
 
 document.addEventListener('visibilitychange', () => {
@@ -1704,14 +1716,14 @@ async function initAccount() {
         Sync.available = false;
     }
     renderAccount();
-    if (loginError) toast('This sign-in link has expired or was already used. Ask for a new one.');
+    if (loginError) toast(t('toast.loginExpired'));
     if (!Sync.on) return;
     try {
         const uploaded = await Sync.pullAndMerge();
         if (signedIn) {
             toast(uploaded
-                ? `Signed in as ${Sync.email}. ${uploaded} collection${uploaded > 1 ? 's' : ''} from this browser now saved to your account.`
-                : `Signed in as ${Sync.email}.`);
+                ? t('toast.signedInMerged', { email: Sync.email, n: uploaded })
+                : t('toast.signedIn', { email: Sync.email }));
         }
     } catch (err) {
         if (err.status === 401) Sync.expired();
@@ -1772,7 +1784,7 @@ const Landing = {
     buildPrompts(prompts) {
         const box = $('landing-prompts');
         prompts.forEach((p, i) => {
-            const b = el('button', 'suggestion', p.label);
+            const b = el('button', 'suggestion', promptLabel(p.label));
             b.type = 'button';
             b.style.setProperty('--i', i);
             b.addEventListener('click', () => { searchInput.value = p.label; runSearch(); });
@@ -1847,7 +1859,7 @@ const Landing = {
                 img.src = item.src;
                 card.style.setProperty('--ratio', item.ratio || 1.2);
                 card.querySelector('.float-title').textContent = item.title;
-                card.setAttribute('aria-label', `Open ${item.title}`);
+                card.setAttribute('aria-label', t('card.open', { title: item.title }));
                 card.classList.remove('swap-out');
             };
             if (!animate) { apply(); return; }
@@ -1889,6 +1901,13 @@ const Landing = {
 };
 
 // ── Init ────────────────────────────────────────────────────────────────────
+// Reveal the page once both Junicode faces are ready (at most 3 s on a slow network).
+Promise.race([
+    Promise.all(['400 1em Junicode', 'italic 400 1em Junicode', '600 1em Junicode'].map(f => document.fonts.load(f))),
+    new Promise(resolve => setTimeout(resolve, 3000)),
+]).finally(() => document.documentElement.classList.remove('is-booting'));
+
+applyI18n();
 Collections.load();
 mainGrid.build();
 recosGrid.build();

@@ -8,7 +8,9 @@
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Ctext x='16' y='23' font-family='Arial' font-weight='700' font-size='20' fill='%23fff' text-anchor='middle'%3EG%3C/text%3E%3C/svg%3E">
     <link rel="preload" href="fonts/JunicodeVF-Roman.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="fonts/JunicodeVF-Italic.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="style.css?v=26">
+    <link rel="stylesheet" href="style.css?v=27">
+    <!-- Hide the page until Junicode has loaded (revealed by app.js); without JS nothing is hidden. -->
+    <script>document.documentElement.classList.add('is-booting');</script>
 </head>
 
 <body class="is-landing">
@@ -23,57 +25,59 @@
         <form id="search-form" class="search" autocomplete="off">
             <div id="search-box" class="search-box">
                 <div id="chips" class="chips"></div>
-                <input type="text" id="search-input" placeholder="Describe an image…" aria-label="Search">
+                <input type="text" id="search-input" placeholder="Describe an image…" aria-label="Search" data-i18n-placeholder="search.placeholder" data-i18n-aria="search.aria">
                 <div class="search-actions">
-                    <label for="file-input" class="link-btn file-btn" title="Search with an image from your device">+ IMAGE</label>
+                    <label for="file-input" class="link-btn file-btn" title="Search with an image from your device" data-i18n-title="search.file.title" data-i18n="search.file">+ IMAGE</label>
                     <input type="file" id="file-input" accept="image/*" multiple hidden>
-                    <button type="button" id="clear-btn" class="link-btn" hidden>CLEAR</button>
-                    <button type="button" id="undo-btn" class="link-btn" hidden>UNDO</button>
-                    <button type="submit" id="search-btn" class="search-btn" aria-label="Search">
+                    <button type="button" id="clear-btn" class="link-btn" data-i18n="search.clear" hidden>CLEAR</button>
+                    <button type="button" id="undo-btn" class="link-btn" data-i18n="search.undo" hidden>UNDO</button>
+                    <button type="submit" id="search-btn" class="search-btn" aria-label="Search" data-i18n-aria="search.aria">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.2" y2="16.2"/></svg>
                     </button>
                 </div>
             </div>
-            <p class="search-hint">…or drop an image here</p>
+            <p class="search-hint" data-i18n="search.hint">…or drop an image here</p>
         </form>
 
         <div id="sb-body" class="sb-body">
             <section class="sb-section">
                 <button type="button" id="settings-toggle" class="sb-heading" aria-expanded="false" aria-controls="settings-panel">
-                    SETTINGS <span class="sb-heading-icon">+</span>
+                    <span data-i18n="settings.title">SETTINGS</span><span id="settings-summary" class="settings-summary"></span><span class="sb-heading-icon">+</span>
                 </button>
                 <div id="settings-panel" class="collapsible">
                 <div class="collapsible-inner">
                 <div class="settings">
-                    <button type="button" id="diversity-toggle" class="toggle" aria-pressed="false">
-                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                        <span class="toggle-label">Boost diversity</span>
-                    </button>
+                    <div class="settings-label" data-i18n="settings.variety"></div>
+                    <div class="segmented" role="radiogroup">
+                        <label><input type="radio" name="variety" value="0" checked><span data-i18n="settings.variety.close"></span></label>
+                        <label><input type="radio" name="variety" value="0.3"><span data-i18n="settings.variety.balanced"></span></label>
+                        <label><input type="radio" name="variety" value="0.6"><span data-i18n="settings.variety.varied"></span></label>
+                    </div>
+                    <p id="variety-help" class="settings-help"></p>
 
-                    <div class="settings-label">Combination mode</div>
-                    <div class="mode-group">
-                        <label class="mode"><input type="radio" name="combination-mode" value="centroid">
-                            <span class="mode-symbol">ø</span><span class="mode-info"><span class="mode-name">Barycentre</span><span class="mode-desc">Vibe général de tous les éléments</span></span></label>
-                        <label class="mode"><input type="radio" name="combination-mode" value="intersection">
-                            <span class="mode-symbol">∩</span><span class="mode-info"><span class="mode-name">Intersection</span><span class="mode-desc">Points communs à tous</span></span></label>
-                        <label class="mode"><input type="radio" name="combination-mode" value="union">
-                            <span class="mode-symbol">∪</span><span class="mode-info"><span class="mode-name">Union</span><span class="mode-desc">Ressemble à l'un d'eux</span></span></label>
-                        <label class="mode"><input type="radio" name="combination-mode" value="pca">
-                            <span class="mode-symbol">≡</span><span class="mode-info"><span class="mode-name">Composante commune</span><span class="mode-desc">Axe partagé entre les éléments</span></span></label>
+                    <div class="settings-label" data-i18n="settings.combine"></div>
+                    <p id="combine-locked" class="settings-help" data-i18n="settings.combine.locked"></p>
+                    <div id="combine-group" class="mode-group">
                         <label class="mode"><input type="radio" name="combination-mode" value="purified" checked>
-                            <span class="mode-symbol">◎</span><span class="mode-info"><span class="mode-name">Spécificité</span><span class="mode-desc">Ce qui est unique à la requête</span></span></label>
+                            <svg class="mode-icon" viewBox="0 0 36 22" aria-hidden="true"><circle class="soft" cx="18" cy="11" r="9.5"/><circle class="fill" cx="21" cy="9" r="4.2"/></svg><span class="mode-info"><span class="mode-name" data-i18n="mode.purified"></span><span class="mode-desc" data-i18n="mode.purified.help"></span></span></label>
+                        <label class="mode"><input type="radio" name="combination-mode" value="centroid">
+                            <svg class="mode-icon" viewBox="0 0 36 22" aria-hidden="true"><circle cx="13" cy="11" r="8"/><circle cx="23" cy="11" r="8"/><circle class="fill" cx="18" cy="11" r="2.6"/></svg><span class="mode-info"><span class="mode-name" data-i18n="mode.centroid"></span><span class="mode-desc" data-i18n="mode.centroid.help"></span></span></label>
+                        <label class="mode"><input type="radio" name="combination-mode" value="intersection">
+                            <svg class="mode-icon" viewBox="0 0 36 22" aria-hidden="true"><circle cx="13" cy="11" r="8"/><circle cx="23" cy="11" r="8"/><path class="fill" d="M18 4.76A8 8 0 0 1 18 17.24A8 8 0 0 1 18 4.76Z"/></svg><span class="mode-info"><span class="mode-name" data-i18n="mode.intersection"></span><span class="mode-desc" data-i18n="mode.intersection.help"></span></span></label>
+                        <label class="mode"><input type="radio" name="combination-mode" value="union">
+                            <svg class="mode-icon" viewBox="0 0 36 22" aria-hidden="true"><circle class="fill" cx="13" cy="11" r="8"/><circle class="fill" cx="23" cy="11" r="8"/></svg><span class="mode-info"><span class="mode-name" data-i18n="mode.union"></span><span class="mode-desc" data-i18n="mode.union.help"></span></span></label>
+                        <label class="mode"><input type="radio" name="combination-mode" value="pca">
+                            <svg class="mode-icon" viewBox="0 0 36 22" aria-hidden="true"><circle cx="13" cy="11" r="8"/><circle cx="23" cy="11" r="8"/><line class="bold" x1="2" y1="11" x2="34" y2="11"/></svg><span class="mode-info"><span class="mode-name" data-i18n="mode.pca"></span><span class="mode-desc" data-i18n="mode.pca.help"></span></span></label>
                     </div>
 
                     <div id="negative-settings" hidden>
-                        <div class="settings-label">Negative mode</div>
-                        <div class="mode-group">
-                            <label class="mode"><input type="radio" name="negative-mode" value="directed" checked>
-                                <span class="mode-symbol">⊖</span><span class="mode-info"><span class="mode-name">Soustraction dirigée</span><span class="mode-desc">Retire ce qui distingue le négatif</span></span></label>
-                            <label class="mode"><input type="radio" name="negative-mode" value="orthogonal">
-                                <span class="mode-symbol">⊥</span><span class="mode-info"><span class="mode-name">Projection orthogonale</span><span class="mode-desc">Efface la composante négative</span></span></label>
-                            <label class="mode"><input type="radio" name="negative-mode" value="penalty">
-                                <span class="mode-symbol">↓</span><span class="mode-info"><span class="mode-name">Pénalité de score</span><span class="mode-desc">Pénalise ce qui ressemble au négatif</span></span></label>
+                        <div class="settings-label" data-i18n="settings.avoid"></div>
+                        <div class="segmented" role="radiogroup">
+                            <label><input type="radio" name="negative-mode" value="penalty"><span data-i18n="neg.penalty"></span></label>
+                            <label><input type="radio" name="negative-mode" value="directed" checked><span data-i18n="neg.directed"></span></label>
+                            <label><input type="radio" name="negative-mode" value="orthogonal"><span data-i18n="neg.orthogonal"></span></label>
                         </div>
+                        <p id="negative-help" class="settings-help"></p>
                     </div>
                 </div>
                 </div>
@@ -82,27 +86,27 @@
 
             <section class="sb-section sb-collections">
                 <div class="sb-heading-row">
-                    <span class="sb-label">COLLECTIONS</span>
-                    <button type="button" id="new-collection-btn" class="link-btn">+ NEW</button>
+                    <span class="sb-label" data-i18n="collections.title">COLLECTIONS</span>
+                    <button type="button" id="new-collection-btn" class="link-btn" data-i18n="collections.new">+ NEW</button>
                 </div>
                 <ul id="collection-list" class="collection-list"></ul>
-                <p class="sb-note sb-drag-hint">Drag an image onto a collection to add it.</p>
+                <p class="sb-note sb-drag-hint" data-i18n="collections.dragHint">Drag an image onto a collection to add it.</p>
             </section>
 
             <section class="sb-section sb-account">
-                <span class="sb-label">ACCOUNT</span>
+                <span class="sb-label" data-i18n="account.title">ACCOUNT</span>
                 <div id="account-out">
                     <p id="account-intro" class="sb-note">Sign in with your email to keep your collections on every device. No password: we send you a link.</p>
                     <form id="auth-form" class="auth-form">
-                        <input type="email" id="auth-email" placeholder="your@email.com" required aria-label="Email" autocomplete="email">
-                        <button type="submit" id="auth-btn" class="pill-btn">SEND LINK</button>
+                        <input type="email" id="auth-email" placeholder="your@email.com" data-i18n-placeholder="account.emailPlaceholder" required aria-label="Email" autocomplete="email">
+                        <button type="submit" id="auth-btn" class="pill-btn" data-i18n="account.send">SEND LINK</button>
                     </form>
                     <p id="auth-status" class="sb-note auth-status" role="status" hidden></p>
                 </div>
                 <div id="account-in" hidden>
                     <p class="account-email" id="account-email"></p>
                     <p class="sb-note sync-status" id="sync-status" role="status"></p>
-                    <button type="button" id="logout-btn" class="link-btn">SIGN OUT</button>
+                    <button type="button" id="logout-btn" class="link-btn" data-i18n="account.signOut">SIGN OUT</button>
                 </div>
             </section>
         </div>
@@ -110,25 +114,25 @@
 
     <main id="main" class="main">
         <div id="view-header" class="view-header" hidden>
-            <button type="button" id="back-btn" class="link-btn">← RESULTS</button>
-            <input type="text" id="collection-name" class="collection-name" aria-label="Collection name">
+            <button type="button" id="back-btn" class="link-btn" data-i18n="view.back">← RESULTS</button>
+            <input type="text" id="collection-name" class="collection-name" aria-label="Collection name" data-i18n-aria="view.collectionName">
             <span id="collection-count" class="view-count"></span>
             <div class="view-actions">
-                <button type="button" id="collection-search-btn" class="pill-btn">VISUAL RESEARCH</button>
-                <button type="button" id="collection-zip-btn" class="link-btn">DOWNLOAD ZIP</button>
-                <button type="button" id="collection-delete-btn" class="link-btn">DELETE</button>
+                <button type="button" id="collection-search-btn" class="pill-btn" data-i18n="view.visualResearch">VISUAL RESEARCH</button>
+                <button type="button" id="collection-zip-btn" class="link-btn" data-i18n="view.zip">DOWNLOAD ZIP</button>
+                <button type="button" id="collection-delete-btn" class="link-btn" data-i18n="view.delete">DELETE</button>
             </div>
         </div>
 
-        <section id="empty-state" class="landing is-loading" aria-label="Welcome to Glane">
+        <section id="empty-state" class="landing is-loading" aria-label="Welcome to Glane" data-i18n-aria="landing.aria">
             <div id="landing-stage" class="landing-stage"></div>
             <div class="landing-center">
                 <h1 class="wordmark" aria-label="Glane">
                     <span class="wm-letter" style="--i:0" aria-hidden="true">G</span><span class="wm-letter" style="--i:1" aria-hidden="true">L</span><span class="wm-letter" style="--i:2" aria-hidden="true">A</span><span class="wm-letter" style="--i:3" aria-hidden="true">N</span><span class="wm-letter" style="--i:4" aria-hidden="true">E</span>
                 </h1>
                 <div class="landing-progress" aria-hidden="true"><span id="landing-progress-bar"></span></div>
-                <p class="landing-tagline">Search <em>408,000</em> <span class="nowrap">public-domain</span> artworks.</p>
-                <p class="landing-sub">From The Met, the Cleveland Museum of Art, the Art Institute of Chicago and the Smithsonian.
+                <p class="landing-tagline" data-i18n-html="landing.tagline">Search <em>408,000</em> <span class="nowrap">public-domain</span> artworks.</p>
+                <p class="landing-sub" data-i18n="landing.sub">From The Met, the Cleveland Museum of Art, the Art Institute of Chicago and the Smithsonian.
                     Describe what you are looking for, drop an image, or try a prompt.</p>
                 <div id="landing-prompts" class="suggestions"></div>
             </div>
@@ -140,10 +144,10 @@
         <section id="recos" class="recos" hidden>
             <div class="recos-head">
                 <div>
-                    <h2 class="recos-title">Suggested for this collection</h2>
+                    <h2 class="recos-title" data-i18n="recos.title">Suggested for this collection</h2>
                     <p id="recos-sub" class="recos-sub"></p>
                 </div>
-                <button type="button" id="recos-more" class="pill-btn">SEE MORE</button>
+                <button type="button" id="recos-more" class="pill-btn" data-i18n="recos.more">SEE MORE</button>
             </div>
             <div id="recos-gallery" class="masonry"></div>
             <div id="recos-status" class="status" hidden></div>
@@ -152,15 +156,15 @@
         <div id="sentinel" class="sentinel"></div>
     </main>
 
-    <div id="lightbox" class="lightbox" role="dialog" aria-modal="true" aria-label="Artwork" hidden>
+    <div id="lightbox" class="lightbox" role="dialog" aria-modal="true" aria-label="Artwork" data-i18n-aria="lb.aria" hidden>
         <div id="lb-similar" class="lb-similar" hidden>
             <span id="lb-similar-label" class="lb-similar-label"></span>
             <div id="lb-similar-strip" class="lb-similar-strip"></div>
         </div>
         <div class="lb-stage">
-            <button type="button" id="lb-prev" class="lb-nav lb-prev" aria-label="Previous">‹</button>
+            <button type="button" id="lb-prev" class="lb-nav lb-prev" aria-label="Previous" data-i18n-aria="lb.prev">‹</button>
             <img id="lb-img" alt="">
-            <button type="button" id="lb-next" class="lb-nav lb-next" aria-label="Next">›</button>
+            <button type="button" id="lb-next" class="lb-nav lb-next" aria-label="Next" data-i18n-aria="lb.next">›</button>
         </div>
         <div class="lb-bar">
             <div class="lb-meta">
@@ -172,15 +176,15 @@
             </div>
             <div class="lb-actions">
                 <span class="lb-split">
-                    <button type="button" id="lb-collect" class="lb-action">COLLECT</button>
-                    <button type="button" id="lb-collect-menu" class="lb-action lb-chevron" aria-haspopup="menu" aria-label="Choose a collection">▾</button>
+                    <button type="button" id="lb-collect" class="lb-action" data-i18n="lb.collect">COLLECT</button>
+                    <button type="button" id="lb-collect-menu" class="lb-action lb-chevron" aria-haspopup="menu" aria-label="Choose a collection" data-i18n-aria="card.chooser">▾</button>
                 </span>
-                <button type="button" id="lb-visual" class="lb-action">VISUAL RESEARCH</button>
+                <button type="button" id="lb-visual" class="lb-action" data-i18n="lb.visual">VISUAL RESEARCH</button>
                 <button type="button" id="lb-cover" class="lb-action" hidden>SET AS COVER</button>
-                <a id="lb-download" class="lb-action" target="_blank" rel="noopener noreferrer" download>DOWNLOAD</a>
+                <a id="lb-download" class="lb-action" target="_blank" rel="noopener noreferrer" download data-i18n="lb.download">DOWNLOAD</a>
             </div>
         </div>
-        <button type="button" id="lb-close" class="lb-close" aria-label="Close"></button>
+        <button type="button" id="lb-close" class="lb-close" aria-label="Close" data-i18n-aria="lb.close"></button>
     </div>
 
     <div id="picker" class="picker" role="menu" hidden></div>
@@ -192,7 +196,8 @@
         <button type="button" id="toast-action" class="toast-action" hidden></button>
     </div>
 
-    <script src="app.js?v=26"></script>
+    <script src="i18n.js?v=27"></script>
+    <script src="app.js?v=27"></script>
 </body>
 
 </html>

@@ -805,12 +805,19 @@ class VisualSearchEngine:
 
             # ── 4. FAISS search (skipped for intersection/union — already done) ──
             if valid_ids is None:
-                fetch_k = min(pool_size * 3, self.index.ntotal)
-                distances, indices = self.index.search(text_embedding, fetch_k)
-                valid_ids = [
-                    int(idx) for idx in indices[0]
-                    if idx >= 0 and int(idx) not in self.denylist
-                ]
+                # Widen the search when the denylist empties it (e.g. "postage stamp"
+                # would otherwise return a handful of results).
+                want = pool_size * 3
+                fetch_k = min(want, self.index.ntotal)
+                while True:
+                    distances, indices = self.index.search(text_embedding, fetch_k)
+                    valid_ids = [
+                        int(idx) for idx in indices[0]
+                        if idx >= 0 and int(idx) not in self.denylist
+                    ]
+                    if len(valid_ids) >= want or fetch_k >= min(5000, self.index.ntotal):
+                        break
+                    fetch_k = min(fetch_k * 4, 5000, self.index.ntotal)
                 score_by_id = {
                     int(idx): float(distances[0][i])
                     for i, idx in enumerate(indices[0])

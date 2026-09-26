@@ -134,7 +134,7 @@ def request_link(req: SignInRequest, request: Request):
         d.execute("INSERT INTO login_tokens (token_hash, email, expires_at, used_at) VALUES (?, ?, ?, NULL)",
                   (_hash(token), email, _now() + TOKEN_MINUTES * 60))
     try:
-        mailer.send_login_email(email, f"{PUBLIC_BASE_URL}/auth/verify?token={token}", TOKEN_MINUTES)
+        mailer.send_login_email(email, f"{PUBLIC_BASE_URL}/auth/verify?token={token}", TOKEN_MINUTES, _lang(request))
     except Exception as e:
         print(f"[auth] email to {email} failed: {e}", flush=True)
         raise HTTPException(502, "The email could not be sent. Please try again.")
@@ -144,8 +144,24 @@ def request_link(req: SignInRequest, request: Request):
     return body
 
 
-def _page(title: str, content: str) -> HTMLResponse:
-    return HTMLResponse(f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+def _lang(request: Request) -> str:
+    return "fr" if request.headers.get("accept-language", "").lower().startswith("fr") else "en"
+
+
+PAGE_TEXT = {
+    "en": {"expired_title": "Link expired", "expired": "This link has expired.",
+           "expired_body": "Sign-in links work once and for {minutes} minutes. Ask for a new one from the Glane menu.",
+           "back": "BACK TO GLANE", "title": "Sign in", "heading": "Sign in to Glane",
+           "as": "You are signing in as", "button": "SIGN IN"},
+    "fr": {"expired_title": "Lien expiré", "expired": "Ce lien a expiré.",
+           "expired_body": "Les liens de connexion fonctionnent une fois, pendant {minutes} minutes. Demandez-en un nouveau depuis le menu de Glane.",
+           "back": "RETOUR À GLANE", "title": "Connexion", "heading": "Se connecter à Glane",
+           "as": "Vous vous connectez en tant que", "button": "SE CONNECTER"},
+}
+
+
+def _page(title: str, content: str, lang: str = "en") -> HTMLResponse:
+    return HTMLResponse(f"""<!doctype html><html lang="{lang}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">
 <title>{html.escape(title)} · Glane</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Ctext x='16' y='23' font-family='Arial' font-weight='700' font-size='20' fill='%23fff' text-anchor='middle'%3EG%3C/text%3E%3C/svg%3E">
@@ -155,7 +171,7 @@ def _page(title: str, content: str) -> HTMLResponse:
 body {{ margin: 0; min-height: 100vh; display: grid; place-items: center; background: #E3E3E3; font-family: Junicode, Georgia, serif; color: #000; }}
 main {{ background: #fff; border-radius: 8px; padding: 2.2rem; width: min(420px, calc(100vw - 2rem)); box-sizing: border-box; animation: in .5s cubic-bezier(.16,1,.3,1) both; }}
 @keyframes in {{ from {{ opacity: 0; transform: translateY(12px); }} }}
-.brand {{ font-size: 1.3rem; letter-spacing: .16em; font-stretch: 125%; font-weight: 600; }}
+.brand {{ font-size: 1.3rem; letter-spacing: .16em; font-weight: 600; }}
 h1 {{ font-weight: 400; font-style: italic; font-size: 1.7rem; margin: 1.6rem 0 .6rem; }}
 p {{ color: #555; line-height: 1.5; margin: 0 0 1.4rem; }}
 button, a.btn {{ font: inherit; font-variant-caps: all-small-caps; letter-spacing: .07em; font-weight: 600; font-size: 1.05rem;
@@ -171,16 +187,17 @@ def _pending_email(token: str) -> Optional[str]:
 
 
 @router.get("/auth/verify", response_class=HTMLResponse)
-def verify_page(token: str = ""):
+def verify_page(request: Request, token: str = ""):
     _require_enabled()
+    lang = _lang(request)
+    m = PAGE_TEXT[lang]
     email = _pending_email(token) if token else None
     if not email:
-        return _page("Link expired", "<h1>This link has expired.</h1><p>Sign-in links work once and for "
-                     f"{TOKEN_MINUTES} minutes. Ask for a new one from the Glane menu.</p>"
-                     '<a class="btn" href="/">BACK TO GLANE</a>')
-    return _page("Sign in", f"<h1>Sign in to Glane</h1><p>You are signing in as <b>{html.escape(email)}</b>.</p>"
+        return _page(m["expired_title"], f"<h1>{m['expired']}</h1><p>{m['expired_body'].format(minutes=TOKEN_MINUTES)}</p>"
+                     f'<a class="btn" href="/">{m["back"]}</a>', lang)
+    return _page(m["title"], f"<h1>{m['heading']}</h1><p>{m['as']} <b>{html.escape(email)}</b>.</p>"
                  f'<form method="post" action="/auth/verify"><input type="hidden" name="token" value="{html.escape(token)}">'
-                 '<button type="submit">SIGN IN</button></form>')
+                 f'<button type="submit">{m["button"]}</button></form>', lang)
 
 
 @router.post("/auth/verify")

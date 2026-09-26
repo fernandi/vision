@@ -182,7 +182,7 @@ class Handler(SimpleHTTPRequestHandler):
             pass  # the browser dropped a superseded request
 
     def _forward(self, method, body, upstream):
-        headers = {k: v for k, v in self.headers.items() if k.lower() in ("content-type", "cookie", "accept")}
+        headers = {k: v for k, v in self.headers.items() if k.lower() in ("content-type", "cookie", "accept", "accept-language")}
         req = urllib.request.Request(upstream + self.path, data=body, method=method, headers={**headers, **UA})
         try:
             resp = _opener.open(req, timeout=180)
