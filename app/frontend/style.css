@@ -337,6 +337,24 @@ button { cursor: pointer; background: none; border: 0; -webkit-tap-highlight-col
 .mode-icon .fill { fill: currentColor; stroke: none; opacity: 0.85; }
 .mode-icon .soft { stroke-dasharray: 2 2; opacity: 0.6; }
 .mode-icon .bold { stroke-width: 2.4; }
+/* Filters: toggle chips, several per group. */
+.filter-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 0.3rem; }
+.filter-chips label { cursor: pointer; }
+.filter-chips input { position: absolute; opacity: 0; pointer-events: none; }
+.filter-chips span {
+    display: block;
+    padding: 0.25rem 0.65rem;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 999px;
+    font-size: 0.8rem;
+    transition: background var(--t-mid) var(--ease-out), color var(--t-mid) var(--ease-out),
+                border-color var(--t-mid) var(--ease-out), transform var(--t-mid) var(--ease-out);
+}
+.filter-chips label:hover span { background: rgba(0, 0, 0, 0.06); }
+.filter-chips label:active span { transform: scale(0.95); }
+.filter-chips input:checked + span { background: var(--ink); border-color: var(--ink); color: #fff; }
+.filter-chips input:focus-visible + span { outline: 2px solid var(--ink); outline-offset: 1px; }
+#filters-clear { margin-top: 0.2rem; }
 .mode-group.is-locked { opacity: 0.3; pointer-events: none; filter: grayscale(1); }
 .mode-desc { white-space: normal; }
 

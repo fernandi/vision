@@ -6,6 +6,8 @@ import os
 import sqlite3
 from transformers import CLIPProcessor, CLIPModel
 
+from app.backend.facets import PERIODS, TECHNIQUES
+
 class VisualSearchEngine:
     def __init__(self, data_dir="data", model_id="openai/clip-vit-base-patch32"):
         self.data_dir = data_dir
@@ -29,6 +31,9 @@ class VisualSearchEngine:
         self.db_conn = None
         self.db_columns = []
         self.denylist: set = set()  # faiss_ids to always suppress from results
+        self.period_mask = None     # uint8 per faiss_id, bits of facets.PERIODS
+        self.technique_mask = None  # uint16 per faiss_id, bits of facets.TECHNIQUES
+        self._selectors: dict = {}  # filter key → (SearchParameters, bitmap, count)
         self.metadata_mapping = []
         self.load_error = None  # exposed via /health for debugging
         self.corpus_mean = None  # unit-norm mean of a random sample of indexed vectors
@@ -158,6 +163,7 @@ class VisualSearchEngine:
 
         self._load_metadata()
         self._build_denylist()
+        self._load_facets()
         self._compute_corpus_mean()
         self._release_page_cache()
 
@@ -260,6 +266,55 @@ class VisualSearchEngine:
         self.denylist = dvb_ids | npm_ids | postage_ids | set(self.extra_denylist())
         print(f"  ✓ denylist built: {len(dvb_ids)} DVB ceramic shards + {len(npm_ids)} NPM stamp sheets + "
               f"{len(postage_ids)} postage stamp blocks = {len(self.denylist)} total suppressed")
+
+    def _load_facets(self):
+        """Period and technique bitmasks per faiss_id (columns written by
+        scripts/build_metadata_db.py). Without them the filters are ignored."""
+        if self.db_conn is None or "period" not in self.db_columns:
+            print("  ⚠ facets: no period/technique columns in metadata.db, filters disabled.")
+            return
+        n = self.index.ntotal
+        periods = np.zeros(n, dtype=np.uint8)
+        techniques = np.zeros(n, dtype=np.uint16)
+        rows = np.array(self.db_conn.execute(
+            "SELECT faiss_id, period, technique FROM images WHERE period > 0 OR technique > 0").fetchall(),
+            dtype=np.int64).reshape(-1, 3)
+        rows = rows[rows[:, 0] < n]
+        periods[rows[:, 0]] = rows[:, 1]
+        techniques[rows[:, 0]] = rows[:, 2]
+        self.period_mask, self.technique_mask = periods, techniques
+        print(f"  ✓ facets loaded ({int((periods > 0).sum())} dated, {int((techniques > 0).sum())} with a technique)")
+
+    @staticmethod
+    def facet_bits(names, vocabulary):
+        """['19th', '20th'] → bitmask over vocabulary; unknown names are ignored."""
+        bits = 0
+        for name in names or []:
+            if name in vocabulary:
+                bits |= 1 << vocabulary.index(name)
+        return bits
+
+    def _filter_params(self, period_bits, technique_bits):
+        """FAISS search parameters restricted to the works matching the filters
+        (any selected period AND any selected technique), denylist excluded.
+        None when no filter applies."""
+        if not (period_bits or technique_bits) or self.period_mask is None:
+            return None
+        key = (period_bits, technique_bits)
+        if key not in self._selectors:
+            keep = np.ones(self.index.ntotal, dtype=bool)
+            if period_bits:
+                keep &= (self.period_mask & period_bits) != 0
+            if technique_bits:
+                keep &= (self.technique_mask & technique_bits) != 0
+            if self.denylist:
+                keep[np.fromiter(self.denylist, dtype=np.int64)] = False
+            bitmap = np.packbits(keep, bitorder="little")
+            params = faiss.SearchParameters(sel=faiss.IDSelectorBitmap(len(keep), faiss.swig_ptr(bitmap)))
+            if len(self._selectors) >= 32:
+                self._selectors.pop(next(iter(self._selectors)))
+            self._selectors[key] = (params, bitmap, int(keep.sum()))   # bitmap must outlive params
+        return self._selectors[key]
 
     @staticmethod
     def extra_denylist():
@@ -641,7 +696,8 @@ class VisualSearchEngine:
     def search(self, query_text, pool_size=200, page_size=20, offset=0, diversity=0.5,
                 image_embedding=None, image_weight=0.5,
                 combination_mode="purified", individual_image_embeddings=None,
-                negative_embeddings=None, negative_mode="directed"):
+                negative_embeddings=None, negative_mode="directed",
+                periods=None, techniques=None):
         """
         Paginated search with MMR diversity.
 
@@ -665,6 +721,8 @@ class VisualSearchEngine:
                 'purified'   — query mean minus corpus mean (amplifies specific attributes)
             individual_image_embeddings: list of (1, D) float32 arrays, one per image.
                                          When provided, used instead of image_embedding.
+            periods, techniques:         facet names (facets.PERIODS / TECHNIQUES) to keep;
+                                         any of the periods AND any of the techniques.
         Returns:
             dict with keys: results (list), total (int), has_more (bool)
         """
@@ -678,8 +736,12 @@ class VisualSearchEngine:
         neg_hash = None
         if negative_embeddings:
             neg_hash = hash(tuple(e.tobytes() for e in negative_embeddings))
+        period_bits = self.facet_bits(periods, PERIODS)
+        technique_bits = self.facet_bits(techniques, TECHNIQUES)
+        filtered = self._filter_params(period_bits, technique_bits)
+        params = filtered[0] if filtered else None
         cache_key = (query_text.strip().lower(), round(diversity, 2), img_hash,
-                     combination_mode, neg_hash, negative_mode)
+                     combination_mode, neg_hash, negative_mode, period_bits, technique_bits)
         pool = self._pool_cache_get(cache_key)
 
         if pool is None:
@@ -770,18 +832,20 @@ class VisualSearchEngine:
                 cand_set  = set()
 
                 # Centroid sweep
-                _, idx0 = self.index.search(centroid_vec, fetch_k)
+                _, idx0 = self.index.search(centroid_vec, fetch_k, params=params)
                 cand_set.update(
                     int(i) for i in idx0[0] if i >= 0 and int(i) not in self.denylist
                 )
                 # Per-element sweeps
                 for ev in all_query_vecs:
-                    _, idx_e = self.index.search(ev, per_el_k)
+                    _, idx_e = self.index.search(ev, per_el_k, params=params)
                     cand_set.update(
                         int(i) for i in idx_e[0] if i >= 0 and int(i) not in self.denylist
                     )
 
                 valid_raw = list(cand_set)
+                if not valid_raw:
+                    return {"results": [], "total": 0, "has_more": False}
 
                 # Reconstruct + normalise candidate vectors
                 cand_vecs = np.vstack(
@@ -836,13 +900,13 @@ class VisualSearchEngine:
                 want = pool_size * 3
                 fetch_k = min(want, self.index.ntotal)
                 while True:
-                    distances, indices = self.index.search(text_embedding, fetch_k)
+                    distances, indices = self.index.search(text_embedding, fetch_k, params=params)
                     valid_ids = [
                         int(idx) for idx in indices[0]
                         if idx >= 0 and int(idx) not in self.denylist
                     ]
-                    if len(valid_ids) >= want or fetch_k >= min(5000, self.index.ntotal):
-                        break
+                    if params is not None or len(valid_ids) >= want or fetch_k >= min(5000, self.index.ntotal):
+                        break   # a filter already excludes the denylist
                     fetch_k = min(fetch_k * 4, 5000, self.index.ntotal)
                 score_by_id = {
                     int(idx): float(distances[0][i])

@@ -125,6 +125,8 @@ class SearchRequest(BaseModel):
     negative_mode: Optional[str] = "directed"    # directed | orthogonal | penalty
     reference_ids: Optional[List[int]] = None    # indexed images used as references (faiss ids)
     negative_ids: Optional[List[int]] = None     # indexed images used as negatives (faiss ids)
+    periods: Optional[List[str]] = None          # filters, see app/backend/facets.py
+    techniques: Optional[List[str]] = None
 
 # Routes
 @app.get("/health")
@@ -194,9 +196,13 @@ def search(req: SearchRequest):
             individual_image_embeddings=individual_image_embeddings or None,
             negative_embeddings=negative_embeddings or None,
             negative_mode=req.negative_mode or "directed",
+            periods=req.periods,
+            techniques=req.techniques,
         )
         elapsed = time.time() - t0
         mode = f"text+{n_imgs}img" if n_imgs else "text"
+        if req.periods or req.techniques:
+            mode += f" filters={'+'.join((req.periods or []) + (req.techniques or []))}"
         print(f"[search/{mode}] '{req.query}' offset={req.offset} → {len(data['results'])} results in {elapsed:.3f}s")
         for item in data["results"]:
             add_image_urls(item)

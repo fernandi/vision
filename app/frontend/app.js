@@ -878,6 +878,16 @@ async function addFiles(files) {
 }
 
 // ── Search & pagination ─────────────────────────────────────────────────────
+// Filters read from the works' descriptions (app/backend/facets.py).
+const PERIODS = ['antiquity', 'middle_ages', '1400_1600', '1600_1800', '19th', '20th'];
+const TECHNIQUES = ['painting', 'drawing', 'print', 'photograph', 'sculpture', 'ceramics',
+    'textile', 'metal', 'glass', 'furniture', 'book'];
+const checkedValues = name => [...document.querySelectorAll(`input[name="${name}"]:checked`)].map(i => i.value);
+
+function currentFilters() {
+    return { periods: checkedValues('period'), techniques: checkedValues('technique') };
+}
+
 function currentSettings() {
     return {
         diversity: Number(document.querySelector('input[name="variety"]:checked').value),
@@ -904,6 +914,9 @@ function buildRequest() {
     if (negFiles.length) body.negative_images = negFiles;
     if (negIds.length) body.negative_ids = negIds;
     if (negFiles.length || negIds.length) body.negative_mode = s.negative_mode;
+    const f = currentFilters();
+    if (f.periods.length) body.periods = f.periods;
+    if (f.techniques.length) body.techniques = f.techniques;
     return body;
 }
 
@@ -949,7 +962,9 @@ async function loadPage(gen) {
         const list = data.results.map(toItem).filter(it => !hiddenIds.has(it.id));
         await fillGrid(mainGrid, list, gen, 'results', it => results.items.push(it));
         if (gen !== renderGen) return;
-        setStatus(statusEl, mainGrid.items.length ? (results.hasMore ? '' : t('status.end')) : t('status.none'));
+        const filtered = results.request.periods || results.request.techniques;
+        setStatus(statusEl, mainGrid.items.length ? (results.hasMore ? '' : t('status.end'))
+            : t(filtered ? 'status.noneFiltered' : 'status.none'));
     } catch (err) {
         console.error(err);
         if (gen === renderGen) {
@@ -988,6 +1003,9 @@ function updateUrl() {
     if (query.text) params.set('q', query.text);
     const ids = query.refs.filter(r => r.id != null).map(r => r.id);
     if (ids.length) params.set('ref', ids.join(','));
+    const f = currentFilters();
+    if (f.periods.length) params.set('period', f.periods.join(','));
+    if (f.techniques.length) params.set('technique', f.techniques.join(','));
     const qs = params.toString();
     history.replaceState(null, '', qs ? `?${qs}` : location.pathname);
 }
@@ -999,6 +1017,7 @@ async function restoreFromUrl() {
     const text = params.get('q') || '';
     const ids = (params.get('ref') || '').split(',').filter(Boolean).map(Number)
         .filter(n => Number.isInteger(n) && n >= 0);
+    setFilters((params.get('period') || '').split(','), (params.get('technique') || '').split(','));
     if (!text && !ids.length) return;
     searchInput.value = text;
     if (ids.length) {
@@ -1586,6 +1605,54 @@ function updateSettingsUI() {
     if (query.negs.length) parts.push(t(`neg.${neg}`));
     $('settings-summary').textContent = parts.join(' · ');
 }
+
+// ── Filters ─────────────────────────────────────────────────────────────────
+$('filters-toggle').addEventListener('click', e => {
+    const open = e.currentTarget.getAttribute('aria-expanded') !== 'true';
+    e.currentTarget.setAttribute('aria-expanded', String(open));
+    $('filters-panel').classList.toggle('open', open);
+});
+
+function renderFilterChips() {
+    for (const [name, values, box] of [['period', PERIODS, 'period-filters'], ['technique', TECHNIQUES, 'technique-filters']]) {
+        $(box).replaceChildren(...values.map(value => {
+            const label = document.createElement('label');
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.name = name;
+            input.value = value;
+            const span = document.createElement('span');
+            span.textContent = t(`${name}.${value}`);
+            label.append(input, span);
+            return label;
+        }));
+    }
+}
+
+function setFilters(periods, techniques) {
+    document.querySelectorAll('input[name="period"]').forEach(i => { i.checked = periods.includes(i.value); });
+    document.querySelectorAll('input[name="technique"]').forEach(i => { i.checked = techniques.includes(i.value); });
+    updateFiltersUI();
+}
+
+// The heading lists the active filters, so they stay visible with the panel closed.
+function updateFiltersUI() {
+    const f = currentFilters();
+    const names = [...f.periods.map(v => t(`period.${v}`)), ...f.techniques.map(v => t(`technique.${v}`))];
+    $('filters-summary').textContent = names.join(' · ');
+    $('filters-clear').hidden = !names.length;
+}
+
+renderFilterChips();
+$('filters-panel').addEventListener('change', e => {
+    if (!e.target.matches('input[type="checkbox"]')) return;
+    updateFiltersUI();
+    if (view === 'results') runSearch();
+});
+$('filters-clear').addEventListener('click', () => {
+    setFilters([], []);
+    if (view === 'results') runSearch();
+});
 
 document.querySelectorAll('input[name="variety"], input[name="combination-mode"], input[name="negative-mode"]').forEach(r =>
     r.addEventListener('change', () => { updateSettingsUI(); if (view === 'results') runSearch(); }));
