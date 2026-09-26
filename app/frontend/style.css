@@ -419,9 +419,13 @@ body.is-dragging #new-collection-btn { opacity: 1; outline: 2px dashed var(--fai
 .suggestion.is-previewing { background: var(--ink); color: #fff; }
 
 /* ── Landing ─────────────────────────────────────────────────────────────── */
+/* The landing fits the window exactly: no page scroll while it is shown. */
+body.is-landing { overflow: hidden; }
+body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hidden; }
+@media (max-height: 720px) { .landing-sub { display: none; } }
 .landing {
     position: relative;
-    min-height: calc(100vh - 2 * var(--gap));
+    height: calc(100dvh - 2 * var(--gap));
     display: grid;
     place-items: center;
     overflow: hidden;
@@ -432,7 +436,7 @@ body.is-dragging #new-collection-btn { opacity: 1; outline: 2px dashed var(--fai
     z-index: 2;
     text-align: center;
     padding: 2rem 1.5rem;
-    max-width: 44rem;
+    width: min(52rem, 100%);
 }
 /* Soft halo keeps the text readable over the floating images. */
 .landing-center::before {
@@ -444,41 +448,46 @@ body.is-dragging #new-collection-btn { opacity: 1; outline: 2px dashed var(--fai
     pointer-events: none;
 }
 
-/* Wordmark: letters rise into place, then a wave runs through the variable
-   font's weight and width while the landing images load. */
+/* Wordmark: the capitals track in (spacing tightens) while each letter
+   surfaces from a blur; then the weight breathes softly while images load. */
 .wordmark {
-    font-size: clamp(4.6rem, 13vw, 11.5rem);
+    display: flex;
+    justify-content: center;          /* stays centred even while wider than its box */
+    font-size: clamp(3.2rem, min(8.6vw, 16vh), 9rem);
     font-weight: 400;
-    line-height: 0.9;
-    letter-spacing: -0.01em;
-    perspective: 900px;
+    line-height: 0.95;
+    letter-spacing: 0.14em;
+    padding-left: 0.14em;             /* balances the space after the last letter */
     white-space: nowrap;
     user-select: none;
+    animation: wmTrack 2.6s cubic-bezier(0.22, 1, 0.36, 1) both 0.1s;
 }
 .wm-letter {
     display: inline-block;
-    font-variation-settings: 'wght' 420, 'wdth' 100;
-    transform-origin: 50% 80%;
-    animation: wmIn 1.25s var(--ease-out) both;
-    animation-delay: calc(var(--i) * 95ms + 150ms);
-    transition: font-variation-settings 700ms var(--ease-out), transform 700ms var(--ease-out);
+    font-variation-settings: 'wght' 420, 'wdth' 104;
+    animation: wmIn 1.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: calc(var(--i) * 120ms + 150ms);
+    transition: font-variation-settings 900ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .landing.is-loading .wm-letter,
 .wm-letter.is-waving {
-    animation: wmIn 1.25s var(--ease-out) both, wmWave 1.7s var(--ease-in-out) infinite;
-    animation-delay: calc(var(--i) * 95ms + 150ms), calc(var(--i) * 140ms + 1.3s);
+    animation: wmIn 1.9s cubic-bezier(0.22, 1, 0.36, 1) both, wmBreathe 3.4s ease-in-out infinite;
+    animation-delay: calc(var(--i) * 120ms + 150ms), calc(var(--i) * 260ms + 1.6s);
 }
-.landing:not(.is-loading) .wm-letter:hover { font-variation-settings: 'wght' 680, 'wdth' 125; transform: translateY(-0.04em); }
+.landing:not(.is-loading) .wm-letter:hover { font-variation-settings: 'wght' 560, 'wdth' 110; }
 
+@keyframes wmTrack {
+    from { letter-spacing: 0.5em; padding-left: 0.5em; }
+    to { letter-spacing: 0.14em; padding-left: 0.14em; }
+}
 @keyframes wmIn {
-    0% { opacity: 0; transform: translateY(0.45em) rotateX(-75deg) scale(0.92); filter: blur(14px); font-variation-settings: 'wght' 300, 'wdth' 75; }
-    60% { opacity: 1; filter: blur(0); }
-    100% { opacity: 1; transform: none; filter: none; font-variation-settings: 'wght' 420, 'wdth' 100; }
+    from { opacity: 0; filter: blur(10px); transform: translateY(0.1em); }
+    to { opacity: 1; filter: blur(0); transform: none; }
 }
 /* Starts and ends on the resting axes, so a letter can stop at the end of any cycle. */
-@keyframes wmWave {
-    0%, 100% { font-variation-settings: 'wght' 420, 'wdth' 100; transform: none; }
-    50% { font-variation-settings: 'wght' 700, 'wdth' 125; transform: translateY(-0.05em); }
+@keyframes wmBreathe {
+    0%, 100% { font-variation-settings: 'wght' 420, 'wdth' 104; }
+    50% { font-variation-settings: 'wght' 560, 'wdth' 112; }
 }
 
 .landing-progress {
@@ -577,7 +586,7 @@ body.is-dragging #new-collection-btn { opacity: 1; outline: 2px dashed var(--fai
 }
 
 @media (max-width: 860px) {
-    .landing { min-height: calc(100dvh - var(--topbar-h, 120px) - 16px); }
+    .landing { height: calc(100dvh - var(--topbar-h, 120px) - 16px); }
     .float-card { width: calc(var(--w) * 1.9); }
     .float-card:nth-child(n + 7) { display: none; }
     .landing-stage { opacity: 0.55; }

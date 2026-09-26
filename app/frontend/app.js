@@ -913,6 +913,7 @@ function showView(name) {
     recosGrid.reset();
     setStatus(statusEl, '');
     $('empty-state').hidden = name !== 'empty';
+    document.body.classList.toggle('is-landing', name === 'empty');
     $('view-header').hidden = name !== 'collection';
     $('recos').hidden = true;
     if (name !== 'collection') viewingId = null;
@@ -1825,7 +1826,7 @@ const Landing = {
         letters.forEach(letter => letter.classList.add('is-waving'));
         landing.classList.remove('is-loading');
         requestAnimationFrame(() => letters.forEach(letter => {
-            const wave = letter.getAnimations().find(a => a.animationName === 'wmWave');
+            const wave = letter.getAnimations().find(a => a.animationName === 'wmBreathe');
             if (!wave) return;
             const current = wave.effect.getComputedTiming().currentIteration;
             wave.effect.updateTiming({ iterations: Math.max(2, (current ?? 0) + 1) });
