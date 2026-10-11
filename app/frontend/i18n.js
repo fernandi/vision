@@ -184,7 +184,7 @@ const STRINGS = {
         'hide.flag': 'WTF flag',
         'hide.flag.desc': 'Report an irrelevant image to the team',
 
-        'picker.collectInto': 'COLLECT INTO',
+        'picker.collectInto': 'IN COLLECTIONS',
         'picker.newGoInto': 'NEW IMAGES GO INTO',
         'picker.new': 'New collection',
         'picker.alreadyIn': 'already in',
@@ -423,7 +423,7 @@ const STRINGS = {
         'hide.flag': 'Signaler',
         'hide.flag.desc': 'Signaler une image hors sujet à l’équipe',
 
-        'picker.collectInto': 'COLLECTER DANS',
+        'picker.collectInto': 'DANS LES COLLECTIONS',
         'picker.newGoInto': 'LES NOUVELLES IMAGES VONT DANS',
         'picker.new': 'Nouvelle collection',
         'picker.alreadyIn': 'déjà dedans',

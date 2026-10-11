@@ -608,26 +608,49 @@ function openPicker(anchor, item, fromImg) {
     anchor.setAttribute('aria-expanded', 'true');
     picker.replaceChildren(el('div', 'picker-label', item ? t('picker.collectInto') : t('picker.newGoInto')));
 
+    const rows = [];
     const row = (c, i) => {
         const btn = el('button', 'picker-item');
         btn.type = 'button';
-        btn.setAttribute('role', 'menuitem');
         btn.style.setProperty('--i', i);
-        btn.classList.toggle('is-target', c.id === Collections.data.activeId);
         const cover = el('span', 'picker-cover');
-        if (c.items[0]) cover.style.backgroundImage = cssUrl(c.items[0].src);
+        const meta = el('span', 'picker-meta');
         const text = el('span', 'picker-text');
-        text.append(el('span', 'picker-name', c.name), el('span', 'picker-meta', countLabel(c.items.length)));
+        text.append(el('span', 'picker-name', c.name), meta);
         btn.append(cover, text);
-        if (item && Collections.contains(c.id, item)) btn.appendChild(el('span', 'picker-mark', '✓'));
-        btn.addEventListener('click', () => {
-            closePicker();
-            setTarget(c.id, !item);
+        const paint = () => {
+            btn.classList.toggle('is-target', c.id === Collections.data.activeId);
+            const first = Collections.cover(c);
+            cover.style.backgroundImage = first ? cssUrl(first.src) : '';
+            meta.textContent = countLabel(c.items.length);
             if (item) {
-                if (Collections.contains(c.id, item)) toast(t('toast.already', { name: c.name }));
-                else collectInto(c.id, item, fromImg);
+                const on = Collections.contains(c.id, item);
+                btn.classList.toggle('is-checked', on);
+                btn.setAttribute('aria-checked', String(on));
             }
-        });
+        };
+        rows.push(paint);
+        if (!item) {
+            // Choosing where new images go.
+            btn.setAttribute('role', 'menuitem');
+            btn.addEventListener('click', () => { closePicker(); setTarget(c.id, true); });
+        } else {
+            // Each collection is a checkbox: tick to add the image, untick to take it out.
+            btn.setAttribute('role', 'menuitemcheckbox');
+            btn.appendChild(el('span', 'picker-check'));
+            btn.addEventListener('click', e => {
+                e.stopPropagation();
+                if (Collections.contains(c.id, item)) {
+                    removeItem(item, c.id);
+                    if (view === 'collection' && viewingId === c.id && !document.body.contains(anchor)) { closePicker(); return; }
+                } else {
+                    setTarget(c.id, false);
+                    collectInto(c.id, item, fromImg);
+                }
+                rows.forEach(p => p());
+            });
+        }
+        paint();
         return btn;
     };
     Collections.all().forEach((c, i) => picker.appendChild(row(c, i)));
@@ -1693,12 +1716,26 @@ async function api(path, { method = 'GET', body, keepalive = false } = {}) {
     return data;
 }
 
+// Payloads always fit the server's limits (app/backend/accounts.py), so one odd
+// image can never block a whole collection from saving.
+const httpOrEmpty = u => (/^https?:\/\//.test(u || '') ? u.slice(0, 2048) : '');
+const toServerItem = i => ({
+    id: i.id ?? null,
+    src: i.src.slice(0, 2048),
+    hd: httpOrEmpty(i.hd),
+    orig: httpOrEmpty(i.orig),
+    url: httpOrEmpty(i.url),
+    title: (i.title || '').slice(0, 500),
+    author: (i.author || '').slice(0, 300),
+    source: (i.source || '').slice(0, 40),
+    members: Array.isArray(i.members) ? i.members.slice(0, 100) : null,
+});
 const toServer = c => ({
-    name: c.name,
+    name: (c.name || '').trim().slice(0, 120) || 'Collection',
     created_at: c.createdAt,
     updated_at: c.updatedAt || c.createdAt,
-    cover_key: c.coverKey || null,
-    items: c.items.filter(i => /^https?:\/\//.test(i.src)),
+    cover_key: c.coverKey ? String(c.coverKey).slice(0, 2100) : null,
+    items: c.items.filter(i => /^https?:\/\//.test(i.src)).slice(0, 2000).map(toServerItem),
 });
 const fromServer = c => ({
     id: c.id, name: c.name, createdAt: c.created_at, updatedAt: c.updated_at, coverKey: c.cover_key, items: c.items,
@@ -1708,6 +1745,7 @@ const fromServer = c => ({
 const Sync = {
     email: null,
     available: true,
+    awaitingLink: false,      // a sign-in link was sent from this tab
     dirty: new Set(),
     deleted: new Map(),       // id → deletion time
     timer: null,
@@ -1839,7 +1877,11 @@ $('auth-form').addEventListener('submit', async e => {
     btn.disabled = true;
     btn.textContent = t('account.sending');
     try {
-        const res = await api('/auth/request', { method: 'POST', body: { email } });
+        // The guest's collections go with the request: the server adds them to the
+        // account when the link is used, even in another browser or the mail app.
+        const guest = Sync.on ? [] : Collections.all().slice(0, 50).map(c => ({ id: c.id, ...toServer(c) }));
+        const res = await api('/auth/request', { method: 'POST', body: { email, guest_collections: guest } });
+        Sync.awaitingLink = true;
         showAuthStatus(t('account.sent', { email }),
             res.dev_outbox ? { label: t('account.devOutbox'), href: res.dev_outbox } : null);
     } catch (err) {
@@ -1866,7 +1908,26 @@ $('logout-btn').addEventListener('click', async () => {
 
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden' && (Sync.dirty.size || Sync.deleted.size)) Sync.flush(true);
+    if (document.visibilityState === 'visible') checkLinkUsed();
 });
+window.addEventListener('focus', checkLinkUsed);
+
+// The link was opened in another tab of this browser: sign this tab in too.
+async function checkLinkUsed() {
+    if (!Sync.awaitingLink || Sync.on) return;
+    try {
+        const s = await api('/auth/session');
+        if (!s.authenticated) return;
+        Sync.awaitingLink = false;
+        Sync.email = s.email;
+        $('auth-status').hidden = true;
+        renderAccount();
+        await Sync.pullAndMerge();
+        toast(t('toast.signedIn', { email: Sync.email }));
+    } catch (err) {
+        console.error('session', err);
+    }
+}
 
 async function initAccount() {
     const params = new URLSearchParams(location.search);

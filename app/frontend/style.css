@@ -1086,6 +1086,22 @@ body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hi
 .picker-name { font-size: 0.86rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .picker-meta { font-size: 0.74rem; color: var(--muted); }
 .picker-mark { font-size: 0.7rem; font-weight: 700; }
+.picker-check {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    border: 1.5px solid currentColor;
+    border-radius: 4px;
+    opacity: 0.35;
+    transition: background var(--t-fast), opacity var(--t-fast), transform var(--t-mid) var(--ease-spring);
+}
+.picker-check::after { content: '✓'; font-size: 0.72rem; font-weight: 700; color: var(--panel); opacity: 0; transform: scale(0.4); transition: opacity var(--t-fast), transform var(--t-mid) var(--ease-spring); }
+.picker-item:hover .picker-check { opacity: 0.7; }
+.picker-item.is-checked .picker-check { background: var(--ink); border-color: var(--ink); opacity: 1; }
+.picker-item.is-checked .picker-check::after { opacity: 1; transform: none; }
+.picker-item:active .picker-check { transform: scale(0.85); }
 .picker-item.is-target .picker-name::after { content: ' ●'; font-size: 0.5rem; vertical-align: middle; }
 
 /* ── Dialog ──────────────────────────────────────────────────────────────── */
@@ -1239,14 +1255,24 @@ body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hi
     .lb-nav { display: none; }
     .lb-bar { flex-direction: column; align-items: stretch; gap: 1rem; padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom)); }
     .lb-meta { max-width: none; }
-    .lb-actions { justify-content: space-between; gap: 0.5rem; }
-    .lb-split { gap: 2px; }
-    .lb-action { opacity: 1; font-size: 0.95rem; padding: 0.7rem 0.9rem; background: var(--panel); border-radius: 999px; }
-    .lb-split .lb-action:first-child { border-radius: 999px 0 0 999px; }
-    .lb-split .lb-chevron { border-radius: 0 999px 999px 0; padding: 0.7rem 0.7rem; }
+    /* Two columns: every action stays on screen, whatever the phone width. */
+    .lb-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .lb-split { display: flex; gap: 2px; min-width: 0; }
+    .lb-split .lb-action:first-child { flex: 1; min-width: 0; border-radius: 999px 0 0 999px; }
+    .lb-split .lb-chevron { border-radius: 0 999px 999px 0; padding: 0.7rem 0.75rem; }
+    .lb-action {
+        opacity: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        text-align: center;
+        font-size: 0.9rem;
+        padding: 0.7rem 0.5rem;
+        background: var(--panel);
+        border-radius: 999px;
+    }
     .lb-action.on { background: var(--ink); color: #fff; }
-    #lb-download { font-size: 0; padding: 0.7rem 1rem; }
-    #lb-download::after { content: '↓'; font-size: 0.95rem; }
+    #lb-cover { order: 1; grid-column: 1 / -1; }
     .lb-similar { padding: 0.6rem 3.5rem 0.6rem 0.8rem; }
     .lb-close { top: 0.6rem; right: 0.6rem; }
 

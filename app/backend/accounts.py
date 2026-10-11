@@ -41,6 +41,7 @@ TOKEN_MINUTES = 15
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 COLLECTION_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
 MAX_COLLECTIONS = 300
+MAX_GUEST_ITEMS = 5000       # images carried over from a guest at sign-in
 
 router = APIRouter()
 
@@ -116,9 +117,44 @@ def _require_user(request: Request) -> str:
     return uid
 
 
+# ── Collection models ────────────────────────────────────────────────────────
+class ItemIn(BaseModel):
+    id: Optional[int] = None
+    src: str = Field(max_length=2048)                 # grid thumbnail
+    hd: str = Field(default="", max_length=2048)      # full-page image
+    orig: str = Field(default="", max_length=2048)    # museum file, fallback
+    url: str = Field(default="", max_length=2048)     # museum page
+    title: str = Field(default="", max_length=500)
+    author: str = Field(default="", max_length=300)
+    source: str = Field(default="", max_length=40)
+    members: Optional[List[int]] = Field(default=None, max_length=100)
+
+    @field_validator("src", "hd", "orig", "url")
+    @classmethod
+    def _http_only(cls, v):
+        if v and not v.startswith(("https://", "http://")):
+            raise ValueError("must be an http(s) URL")
+        return v
+
+
+class CollectionIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    created_at: int
+    updated_at: int
+    cover_key: Optional[str] = Field(default=None, max_length=2100)
+    items: List[ItemIn] = Field(default_factory=list, max_length=2000)
+
+
+class GuestCollectionIn(CollectionIn):
+    id: str = Field(max_length=40)
+
+
 # ── Sign-in ──────────────────────────────────────────────────────────────────
 class SignInRequest(BaseModel):
     email: str = Field(max_length=254)
+    # Collections made before signing in: they join the account when the link is used,
+    # even if it opens in another browser (mail app, other device…).
+    guest_collections: List[GuestCollectionIn] = Field(default_factory=list, max_length=50)
 
 
 @router.post("/auth/request")
@@ -130,11 +166,17 @@ def request_link(req: SignInRequest, request: Request):
     if not (_allow(f"email:{email}", 3, 600) and _allow(f"ip:{_client_ip(request)}", 20, 3600)):
         raise HTTPException(429, "Too many attempts. Please try again in a few minutes.")
 
+    guests = [g for g in req.guest_collections if COLLECTION_ID_RE.match(g.id)]
+    if sum(len(g.items) for g in guests) > MAX_GUEST_ITEMS:
+        raise HTTPException(400, "Too many images to carry over")
+    guest_json = json.dumps([g.model_dump() for g in guests], ensure_ascii=False) if guests else None
+
     token = secrets.token_urlsafe(32)
     with db.transaction() as d:
         d.execute("DELETE FROM login_tokens WHERE expires_at < ?", (_now() - 86400,))
-        d.execute("INSERT INTO login_tokens (token_hash, email, expires_at, used_at) VALUES (?, ?, ?, NULL)",
-                  (_hash(token), email, _now() + TOKEN_MINUTES * 60))
+        d.execute("INSERT INTO login_tokens (token_hash, email, expires_at, used_at, guest_collections) "
+                  "VALUES (?, ?, ?, NULL, ?)",
+                  (_hash(token), email, _now() + TOKEN_MINUTES * 60, guest_json))
     try:
         mailer.send_login_email(email, f"{PUBLIC_BASE_URL}/auth/verify?token={token}", TOKEN_MINUTES, _lang(request))
     except Exception as e:
@@ -212,7 +254,8 @@ def verify(token: str = Form(...)):
             (now, _hash(token), now)).rowcount
         if claimed != 1:
             return RedirectResponse("/?login_error=expired", status_code=303)
-        email = d.one("SELECT email FROM login_tokens WHERE token_hash = ?", (_hash(token),))["email"]
+        row = d.one("SELECT email, guest_collections FROM login_tokens WHERE token_hash = ?", (_hash(token),))
+        email = row["email"]
         user = d.one("SELECT id FROM users WHERE email = ?", (email,))
         if user:
             user_id = user["id"]
@@ -221,6 +264,10 @@ def verify(token: str = Form(...)):
             user_id = uuid.uuid4().hex
             d.execute("INSERT INTO users (id, email, created_at, last_login_at) VALUES (?, ?, ?, ?)",
                       (user_id, email, now, now))
+        for g in json.loads(row["guest_collections"] or "[]"):
+            body = GuestCollectionIn(**g)
+            _upsert_collection(d, user_id, body.id, body)
+        d.execute("UPDATE login_tokens SET guest_collections = NULL WHERE token_hash = ?", (_hash(token),))
     resp = RedirectResponse("/?signed_in=1", status_code=303)
     resp.set_cookie(COOKIE_NAME, _session_value(user_id), max_age=SESSION_DAYS * 86400, httponly=True,
                     samesite="lax", secure=PUBLIC_BASE_URL.startswith("https://"), path="/")
@@ -257,33 +304,6 @@ if ENV != "production":
 
 
 # ── Collections ──────────────────────────────────────────────────────────────
-class ItemIn(BaseModel):
-    id: Optional[int] = None
-    src: str = Field(max_length=2048)                 # grid thumbnail
-    hd: str = Field(default="", max_length=2048)      # full-page image
-    orig: str = Field(default="", max_length=2048)    # museum file, fallback
-    url: str = Field(default="", max_length=2048)     # museum page
-    title: str = Field(default="", max_length=500)
-    author: str = Field(default="", max_length=300)
-    source: str = Field(default="", max_length=40)
-    members: Optional[List[int]] = Field(default=None, max_length=100)
-
-    @field_validator("src", "hd", "orig", "url")
-    @classmethod
-    def _http_only(cls, v):
-        if v and not v.startswith(("https://", "http://")):
-            raise ValueError("must be an http(s) URL")
-        return v
-
-
-class CollectionIn(BaseModel):
-    name: str = Field(min_length=1, max_length=120)
-    created_at: int
-    updated_at: int
-    cover_key: Optional[str] = Field(default=None, max_length=2100)
-    items: List[ItemIn] = Field(default_factory=list, max_length=2000)
-
-
 def _out(row: dict) -> dict:
     return {"id": row["id"], "name": row["name"], "created_at": row["created_at"],
             "updated_at": row["updated_at"], "cover_key": row["cover_key"], "items": json.loads(row["items"])}
@@ -307,22 +327,30 @@ def list_collections(request: Request):
 def save_collection(cid: str, body: CollectionIn, request: Request):
     uid = _require_user(request)
     _check_id(cid)
-    items = json.dumps([i.model_dump() for i in body.items], ensure_ascii=False)
     with db.transaction() as d:
-        row = d.one("SELECT * FROM collections WHERE user_id = ? AND id = ?", (uid, cid))
-        if row and row["updated_at"] > body.updated_at:
+        row = _upsert_collection(d, uid, cid, body)
+        if row is not None:
             return {"status": "stale", "deleted": bool(row["deleted"]), "collection": _out(row)}
-        if not row:
-            count = d.one("SELECT COUNT(*) AS n FROM collections WHERE user_id = ? AND deleted = 0", (uid,))["n"]
-            if count >= MAX_COLLECTIONS:
-                raise HTTPException(409, "Too many collections")
-        d.execute(
-            """INSERT INTO collections (user_id, id, name, created_at, updated_at, cover_key, items, deleted)
-               VALUES (?, ?, ?, ?, ?, ?, ?, 0)
-               ON CONFLICT (user_id, id) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at,
-                   cover_key = excluded.cover_key, items = excluded.items, deleted = 0""",
-            (uid, cid, body.name.strip(), body.created_at, body.updated_at, body.cover_key, items))
-    return {"status": "saved"}
+        return {"status": "saved"}
+
+
+def _upsert_collection(d, uid: str, cid: str, body: CollectionIn):
+    """Save a collection unless the stored one is newer (then return that row)."""
+    row = d.one("SELECT * FROM collections WHERE user_id = ? AND id = ?", (uid, cid))
+    if row and row["updated_at"] > body.updated_at:
+        return row
+    if not row:
+        count = d.one("SELECT COUNT(*) AS n FROM collections WHERE user_id = ? AND deleted = 0", (uid,))["n"]
+        if count >= MAX_COLLECTIONS:
+            raise HTTPException(409, "Too many collections")
+    items = json.dumps([i.model_dump() for i in body.items], ensure_ascii=False)
+    d.execute(
+        """INSERT INTO collections (user_id, id, name, created_at, updated_at, cover_key, items, deleted)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+           ON CONFLICT (user_id, id) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at,
+               cover_key = excluded.cover_key, items = excluded.items, deleted = 0""",
+        (uid, cid, body.name.strip(), body.created_at, body.updated_at, body.cover_key, items))
+    return None
 
 
 @router.delete("/api/collections/{cid}")
