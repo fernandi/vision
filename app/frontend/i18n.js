@@ -13,7 +13,6 @@ const STRINGS = {
         'search.file.title': 'Search with an image from your device',
         'search.clear': 'CLEAR',
         'search.undo': 'UNDO',
-        'search.hint': '…or drop an image here',
         'search.removeImage': 'Remove image',
 
         'settings.title': 'SETTINGS',
@@ -98,6 +97,8 @@ const STRINGS = {
         'status.loading': 'Loading',
         'status.end': 'End of results',
         'status.none': 'No results',
+        'weather.button': 'WEATHER',
+        'weather.button.aria': 'Weather in paintings',
         'weather.kicker': 'WEATHER',
         'weather.today': 'Today',
         'weather.tomorrow': 'Tomorrow',
@@ -252,7 +253,6 @@ const STRINGS = {
         'search.file.title': 'Chercher avec une image de votre appareil',
         'search.clear': 'EFFACER',
         'search.undo': 'ANNULER',
-        'search.hint': '…ou déposez une image ici',
         'search.removeImage': 'Retirer l’image',
 
         'settings.title': 'RÉGLAGES',
@@ -337,6 +337,8 @@ const STRINGS = {
         'status.loading': 'Chargement',
         'status.end': 'Fin des résultats',
         'status.none': 'Aucun résultat',
+        'weather.button': 'MÉTÉO',
+        'weather.button.aria': 'La météo en tableaux',
         'weather.kicker': 'MÉTÉO',
         'weather.today': 'Aujourd’hui',
         'weather.tomorrow': 'Demain',

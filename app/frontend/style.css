@@ -212,7 +212,6 @@ button { cursor: pointer; background: none; border: 0; -webkit-tap-highlight-col
 .search-btn:hover { transform: scale(1.08) rotate(-8deg); }
 .search-btn:active { transform: scale(0.92); }
 
-.search-hint { font-size: 0.78rem; font-style: italic; color: var(--muted); margin-top: 0.4rem; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .chips:empty { display: none; }
@@ -588,6 +587,33 @@ body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hi
 
 /* Floating images */
 .landing-stage { position: absolute; inset: 0; z-index: 1; --mx: 0; --my: 0; }
+
+/* Weather: its own small button in the corner, apart from the prompt suggestions. */
+.landing-weather {
+    position: absolute;
+    top: 0.4rem;
+    right: 0.4rem;
+    z-index: 3;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.45rem 0.85rem 0.45rem 0.7rem;
+    border-radius: 999px;
+    background: var(--panel);
+    font-variant-caps: all-small-caps;
+    font-size: 0.86rem;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+    animation: fadeIn 600ms ease 400ms both;
+    transition: background var(--t-fast) ease, color var(--t-fast) ease, transform var(--t-mid) var(--ease-spring);
+}
+.landing-weather:hover { background: var(--ink); color: #fff; transform: translateY(-2px); }
+.landing-weather:active { transform: scale(0.95); }
+.landing-weather:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.landing-weather-icon { display: flex; }
+.landing-weather-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.landing-weather-temp { font-variant-caps: normal; font-weight: 400; letter-spacing: 0; }
 .float-card {
     position: absolute;
     left: var(--x);
@@ -1215,7 +1241,6 @@ body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hi
     }
     .sb-top { padding: 0.75rem 1rem 0.5rem; }
     .search { padding: 0 1rem 0.75rem; }
-    .search-hint { display: none; }
     .search-box { flex-wrap: nowrap; padding: 0.35rem 0.4rem 0.35rem 0.7rem; }
     .search-box:has(.chip) { flex-wrap: wrap; }
     #search-input { flex: 1 1 auto; font-size: 16px; }

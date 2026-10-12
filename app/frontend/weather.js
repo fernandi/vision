@@ -1,4 +1,4 @@
-// ── Weather mode (hidden: key M, or ?meteo) ──────────────────────────────────
+// ── Weather mode (button on the landing, key M, or ?meteo) ──────────────────
 // Today's or tomorrow's weather somewhere, illustrated by paintings from the
 // index that show the same sky. Forecasts and place search come from Open-Meteo
 // (no key needed); the name of a GPS position comes from BigDataCloud.
@@ -120,7 +120,9 @@ const Weather = (() => {
             current: 'temperature_2m,weather_code,is_day,wind_speed_10m',
             daily: 'weather_code,temperature_2m_max,temperature_2m_min,wind_speed_10m_max',
         });
-        const data = await getJSON(`https://api.open-meteo.com/v1/forecast?${qs}`);
+        const url = `https://api.open-meteo.com/v1/forecast?${qs}`;
+        // One retry: a single network hiccup should not leave "unavailable" on screen.
+        const data = await getJSON(url).catch(() => new Promise(r => setTimeout(r, 800)).then(() => getJSON(url)));
         forecast = { key, at: Date.now(), data };
         return data;
     }
@@ -195,6 +197,7 @@ const Weather = (() => {
         place = next;
         store.set(PLACE_KEY, place);
         refresh();
+        paintButton();
     }
 
     // ── Place search and GPS position ────────────────────────────────────────
@@ -249,6 +252,34 @@ const Weather = (() => {
         }, { timeout: 15000, maximumAge: 30 * 60 * 1000 });
     }
 
+    // ── Landing button: today's sky where the visitor last looked ────────────
+    const CLOUD = '<path d="M7 18h10.5a3.5 3.5 0 0 0 .4-7 5.5 5.5 0 0 0-10.6 1.2A3 3 0 0 0 7 18z"/>';
+    const ICONS = {
+        clear: '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/>',
+        night: '<path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5z"/>',
+        partly: '<path d="M9 3.5v1.2M3.5 9h1.2M5.1 5.1l.9.9M12.9 5.1l-.9.9"/><path d="M6.4 11A3 3 0 0 1 12 8.2"/>' + CLOUD,
+        overcast: CLOUD,
+        fog: '<path d="M4 9h16M6 13h12M4 17h16"/>',
+        drizzle: CLOUD.replace('18z', '15z').replace('M7 18h', 'M7 15h') + '<path d="M9 19v.5M13 19v.5M17 19v.5"/>',
+        rain: CLOUD.replace('18z', '15z').replace('M7 18h', 'M7 15h') + '<path d="M9 18l-1 3M13 18l-1 3M17 18l-1 3"/>',
+        snow: CLOUD.replace('18z', '15z').replace('M7 18h', 'M7 15h') + '<path d="M9 19h.01M13 20h.01M17 19h.01"/>',
+        storm: CLOUD.replace('18z', '15z').replace('M7 18h', 'M7 15h') + '<path d="M13 16l-2 3h3l-2 3"/>',
+    };
+    const iconFor = r => `<svg viewBox="0 0 24 24">${ICONS[r && r.night && ['clear', 'partly'].includes(r.sky) ? 'night' : r ? r.sky : 'partly']}</svg>`;
+
+    async function paintButton() {
+        $('landing-weather-icon').innerHTML = iconFor(null);
+        if (!place) return;
+        try {
+            const r = reading(await loadForecast(), 'today');
+            $('landing-weather-icon').innerHTML = iconFor(r);
+            const label = $('landing-weather-label');
+            label.replaceChildren(document.createTextNode(`${place.name} `), el('span', 'landing-weather-temp', r.label));
+        } catch (err) {
+            console.error('weather', err);   // the button still opens the weather page
+        }
+    }
+
     // ── Open / close ─────────────────────────────────────────────────────────
     // historyMode: 'push' (key M), 'replace' (arriving on ?meteo), 'none' (back/forward).
     function open(historyMode = 'push') {
@@ -291,6 +322,7 @@ const Weather = (() => {
         refresh();
     }));
     $('weather-change').addEventListener('click', () => showPicker(true));
+    $('landing-weather').addEventListener('click', () => open());
     $('weather-locate').addEventListener('click', locate);
     $('weather-close').addEventListener('click', close);
     placeInput.addEventListener('input', () => {
@@ -307,6 +339,7 @@ const Weather = (() => {
         placeList.querySelector('.weather-place-option')?.click();
     });
 
+    paintButton();
     if (new URLSearchParams(location.search).has('meteo')) open('replace');
 
     return { open, close, leave };

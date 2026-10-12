@@ -8,7 +8,7 @@
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Ctext x='16' y='23' font-family='Arial' font-weight='700' font-size='20' fill='%23fff' text-anchor='middle'%3EG%3C/text%3E%3C/svg%3E">
     <link rel="preload" href="fonts/JunicodeVF-Roman.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="fonts/JunicodeVF-Italic.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="style.css?v=32">
+    <link rel="stylesheet" href="style.css?v=33">
     <!-- Hide the page until Junicode has loaded (revealed by app.js); without JS nothing is hidden. -->
     <script>document.documentElement.classList.add('is-booting');</script>
 </head>
@@ -36,7 +36,6 @@
                     </button>
                 </div>
             </div>
-            <p class="search-hint" data-i18n="search.hint">…or drop an image here</p>
         </form>
 
         <div id="sb-body" class="sb-body">
@@ -180,6 +179,10 @@
 
         <section id="empty-state" class="landing is-loading" aria-label="Welcome to Glane" data-i18n-aria="landing.aria">
             <div id="landing-stage" class="landing-stage"></div>
+            <button type="button" id="landing-weather" class="landing-weather" aria-label="Weather in paintings" data-i18n-aria="weather.button.aria">
+                <span id="landing-weather-icon" class="landing-weather-icon" aria-hidden="true"></span>
+                <span id="landing-weather-label" data-i18n="weather.button">WEATHER</span>
+            </button>
             <div class="landing-center">
                 <h1 class="wordmark" aria-label="Glane">
                     <span class="wm-letter" style="--i:0" aria-hidden="true">G</span><span class="wm-letter" style="--i:1" aria-hidden="true">L</span><span class="wm-letter" style="--i:2" aria-hidden="true">A</span><span class="wm-letter" style="--i:3" aria-hidden="true">N</span><span class="wm-letter" style="--i:4" aria-hidden="true">E</span>
@@ -251,9 +254,9 @@
         <button type="button" id="toast-action" class="toast-action" hidden></button>
     </div>
 
-    <script src="i18n.js?v=32"></script>
-    <script src="app.js?v=32"></script>
-    <script src="weather.js?v=32"></script>
+    <script src="i18n.js?v=33"></script>
+    <script src="app.js?v=33"></script>
+    <script src="weather.js?v=33"></script>
 </body>
 
 </html>
