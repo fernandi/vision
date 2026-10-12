@@ -482,7 +482,8 @@ function setCover(item) {
 function onCollectClick(card) {
     const cid = cardCollectionId(card) ?? Collections.ensureTarget().id;
     const item = card._item;
-    if (Collections.contains(cid, item)) { openItemDialog(item, cid); return; }
+    // Already collected: the checklist of collections, to take it out of one or add it to another.
+    if (Collections.contains(cid, item)) { openPicker(card.querySelector('.card-collect'), item, card.querySelector('.card-img img')); return; }
     collectInto(cid, item, card.querySelector('.card-img img'));
     const btn = card.querySelector('.card-collect');
     btn.classList.remove('pop');
@@ -732,56 +733,6 @@ function dialogButton(label, className, onClick) {
     return b;
 }
 
-function openItemDialog(item, fromId) {
-    const from = Collections.get(fromId);
-    openDialog(d => {
-        const head = el('div', 'dialog-head');
-        const thumb = new Image();
-        thumb.className = 'dialog-thumb';
-        thumb.src = item.src;
-        thumb.alt = '';
-        const text = el('div');
-        text.append(el('div', 'dialog-title', item.title), el('div', 'dialog-text', t('dialog.in', { name: from.name })));
-        head.append(thumb, text);
-        d.appendChild(head);
-
-        const others = Collections.all().filter(c => c.id !== fromId);
-        const section = el('div', 'dialog-section');
-        section.appendChild(el('div', 'dialog-label', t('dialog.moveTo')));
-        const list = el('div', 'dialog-list');
-        others.forEach((c, i) => {
-            const b = el('button', 'picker-item');
-            b.type = 'button';
-            b.style.setProperty('--i', i);
-            const cover = el('span', 'picker-cover');
-            if (c.items[0]) cover.style.backgroundImage = cssUrl(c.items[0].src);
-            const t = el('span', 'picker-text');
-            t.append(el('span', 'picker-name', c.name), el('span', 'picker-meta', countLabel(c.items.length)));
-            b.append(cover, t);
-            if (Collections.contains(c.id, item)) b.appendChild(el('span', 'picker-mark', t('picker.alreadyIn')));
-            b.addEventListener('click', () => { moveItem(item, fromId, c.id); closeDialog(); });
-            list.appendChild(b);
-        });
-        const create = el('button', 'picker-item picker-new');
-        create.type = 'button';
-        create.style.setProperty('--i', others.length);
-        const t = el('span', 'picker-text');
-        t.append(el('span', 'picker-name', t('picker.new')));
-        create.append(el('span', 'picker-cover', '+'), t);
-        create.addEventListener('click', () => { const c = Collections.create(); moveItem(item, fromId, c.id); closeDialog(); });
-        list.appendChild(create);
-        section.appendChild(list);
-        d.appendChild(section);
-
-        const foot = el('div', 'dialog-foot');
-        foot.append(
-            dialogButton(t('dialog.cancel'), 'link-btn', closeDialog),
-            dialogButton(t('dialog.remove'), 'pill-btn danger-btn', () => { removeItem(item, fromId); closeDialog(); }),
-        );
-        d.appendChild(foot);
-    });
-}
-
 function removeItem(item, cid) {
     const idx = Collections.removeItem(cid, item);
     afterRemoval(item, cid);
@@ -789,22 +740,6 @@ function removeItem(item, cid) {
     toast(t('toast.removed', { name: Collections.get(cid).name }), {
         label: t('toast.undo'),
         run: () => { Collections.insertAt(cid, item, idx); restoreInView(item, cid); repaintAll(); },
-    });
-}
-
-function moveItem(item, fromId, toId) {
-    const idx = Collections.removeItem(fromId, item);
-    const added = Collections.add(toId, item);
-    afterRemoval(item, fromId);
-    repaintAll();
-    toast(t('toast.moved', { name: Collections.get(toId).name }), {
-        label: t('toast.undo'),
-        run: () => {
-            if (added) Collections.removeItem(toId, item);
-            Collections.insertAt(fromId, item, idx);
-            restoreInView(item, fromId);
-            repaintAll();
-        },
     });
 }
 
@@ -943,7 +878,62 @@ function buildRequest() {
     return body;
 }
 
+// ── Browser history ─────────────────────────────────────────────────────────
+// Each page (landing, a search, a collection, a shared collection, weather) is one
+// history entry and a full-page image one more on top, so the phone's back button
+// walks back through the site instead of leaving it.
+const Nav = {
+    pendingBack: null,
+    get canGoBack() { return (history.state?.depth || 0) > 0; },
+    push(page, url = location.pathname + location.search) {
+        history.replaceState({ ...history.state, scrollY: window.scrollY }, '');
+        history.pushState({ ...page, depth: (history.state?.depth || 0) + 1 }, '', url);
+    },
+    replace(page, url = location.pathname + location.search) {
+        history.replaceState({ ...page, depth: history.state?.depth || 0 }, '', url);
+    },
+    // Goes back one entry; resolves once the browser has done it.
+    back() {
+        return new Promise(resolve => { this.pendingBack = resolve; history.back(); });
+    },
+};
+history.scrollRestoration = 'manual';
+
+window.addEventListener('popstate', e => {
+    if (Nav.pendingBack) { const done = Nav.pendingBack; Nav.pendingBack = null; done(); return; }
+    const s = e.state || {};
+    if (lbItem && !s.lb) { closeLightbox(true); return; }   // back from a full-page image
+    if (s.lb) { history.back(); return; }                   // forward onto a closed image: skip it
+    closePicker(true);
+    if (dialog.open) dialog.close();
+    closeMenu();
+    showPage(s);
+});
+
+function showPage(s) {
+    if (s.view === 'collection' && Collections.get(s.id)) { openCollection(s.id, false); return; }
+    if (s.view === 'weather') { Weather.open('none'); return; }
+    if (s.view === 'shared' && s.slug) { openShared(s.slug); return; }
+    const params = new URLSearchParams(location.search);
+    if (!params.has('q') && !params.has('ref')) {
+        searchInput.value = '';
+        query.refs = [];
+        query.negs = [];
+        renderChips();
+        showView('empty');
+        return;
+    }
+    // Same search still in memory (and in the search bar): show it again as it was.
+    const refIds = query.refs.filter(r => r.id != null).map(r => r.id).join(',');
+    const intact = results.request && results.url === location.search
+        && searchInput.value.trim() === (params.get('q') || '') && refIds === (params.get('ref') || '');
+    if (intact) { backToResults(s.scrollY); return; }
+    searchFromUrl(params, 'none');
+}
+
 function showView(name) {
+    // Leaving the weather page puts back the search it covered.
+    if (view === 'weather' && name !== 'weather' && typeof Weather !== 'undefined') Weather.leave();
     view = name;
     renderGen++;
     mainGrid.reset();
@@ -960,9 +950,18 @@ function showView(name) {
     window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
-function runSearch() {
+// history: 'auto' adds an entry for a new search and updates the current one when
+// only settings or filters change; 'replace' and 'none' never add one.
+function runSearch(historyMode = 'auto') {
     query.text = searchInput.value.trim();
     if (!query.text && !query.refs.length) return;
+    if (historyMode === 'auto') {
+        const now = new URLSearchParams(location.search);
+        const next = searchParams();
+        const same = view === 'results' && now.get('q') === next.get('q') && now.get('ref') === next.get('ref');
+        historyMode = same ? 'replace' : 'push';
+    }
+    updateUrl(historyMode);   // before showView, which scrolls to the top: the entry keeps the scroll position
     closeMenu();
     showView('results');
     results.request = buildRequest();
@@ -970,7 +969,6 @@ function runSearch() {
     results.hasMore = true;
     results.items = [];
     mainGrid.skeleton(14);
-    updateUrl();
     loadPage(renderGen);
 }
 
@@ -1011,18 +1009,21 @@ new IntersectionObserver(entries => {
     if (entries[0].isIntersecting) maybeLoadMore();
 }, { rootMargin: '800px' }).observe($('sentinel'));
 
-function backToResults() {
+function backToResults(scrollY = 0) {
     if (!results.request) { showView('empty'); return; }
     showView('results');
+    Nav.replace({ view: 'results' }, results.url || location.pathname + location.search);
     const gen = renderGen;
     const previous = results.items;
     results.items = [];
     fillGrid(mainGrid, previous, gen, 'results', it => results.items.push(it)).then(done => {
-        if (done) setStatus(statusEl, results.hasMore ? '' : t('status.end'));
+        if (!done) return;
+        setStatus(statusEl, results.hasMore ? '' : t('status.end'));
+        if (scrollY) window.scrollTo({ top: scrollY, behavior: 'instant' });
     });
 }
 
-function updateUrl() {
+function searchParams() {
     const params = new URLSearchParams();
     if (query.text) params.set('q', query.text);
     const ids = query.refs.filter(r => r.id != null).map(r => r.id);
@@ -1030,20 +1031,37 @@ function updateUrl() {
     const f = currentFilters();
     if (f.periods.length) params.set('period', f.periods.join(','));
     if (f.techniques.length) params.set('technique', f.techniques.join(','));
-    const qs = params.toString();
-    history.replaceState(null, '', qs ? `?${qs}` : location.pathname);
+    return params;
+}
+
+function updateUrl(historyMode) {
+    const qs = searchParams().toString();
+    const url = qs ? `?${qs}` : location.pathname;
+    if (historyMode === 'push') Nav.push({ view: 'results' }, url);
+    else if (historyMode !== 'none') Nav.replace({ view: 'results' }, url);
+    results.url = location.search;
 }
 
 async function restoreFromUrl() {
     const params = new URLSearchParams(location.search);
     if (params.get('c')) { openShared(params.get('c')); return; }
+    if (params.has('meteo')) return;   // weather.js opens it
+    Nav.replace({ view: 'empty' });
     if (params.get('i')) { openSharedImage(Number(params.get('i'))); return; }
+    await searchFromUrl(params, 'replace');
+}
+
+// The search an address describes (first visit, or back/forward in history).
+async function searchFromUrl(params, historyMode) {
     const text = params.get('q') || '';
     const ids = (params.get('ref') || '').split(',').filter(Boolean).map(Number)
         .filter(n => Number.isInteger(n) && n >= 0);
     setFilters((params.get('period') || '').split(','), (params.get('technique') || '').split(','));
     if (!text && !ids.length) return;
     searchInput.value = text;
+    query.refs = [];
+    query.negs = [];
+    renderChips();
     if (ids.length) {
         try {
             const data = await postJSON('/cluster-members', { faiss_ids: ids });
@@ -1051,7 +1069,7 @@ async function restoreFromUrl() {
             renderChips();
         } catch (err) { console.error('restore refs', err); }
     }
-    runSearch();
+    runSearch(historyMode);
 }
 
 // ── Clear / undo ────────────────────────────────────────────────────────────
@@ -1166,12 +1184,13 @@ acceptsItemDrop($('new-collection-btn'), item => {
 });
 
 // ── Collection view + automatic suggestions ────────────────────────────────
-function openCollection(id) {
+function openCollection(id, record = true) {
     const c = Collections.get(id);
     if (!c) return;
     closeMenu();
     setTarget(id, false);
     viewingId = id;
+    if (record) Nav.push({ view: 'collection', id });   // before showView resets the scroll
     showView('collection');
     $('collection-name').value = c.name;
     $('collection-count').textContent = countLabel(c.items.length);
@@ -1305,7 +1324,10 @@ $('collection-delete-btn').addEventListener('click', async () => {
     backToResults();
 });
 
-$('back-btn').addEventListener('click', backToResults);
+$('back-btn').addEventListener('click', () => {
+    Nav.push({ view: 'results' });
+    backToResults();
+});
 
 // ── Sharing ─────────────────────────────────────────────────────────────────
 const shareUrl = (key, value) => `${location.origin}${location.pathname}?${key}=${encodeURIComponent(value)}`;
@@ -1358,6 +1380,7 @@ let shared = null;   // collection opened from a ?c= link
 async function openShared(slug) {
     closeMenu();
     showView('shared');
+    Nav.replace({ view: 'shared', slug });
     const gen = renderGen;
     mainGrid.skeleton(8);
     try {
@@ -1420,20 +1443,25 @@ function openLightbox(grid, item) {
     lightbox.hidden = false;
     document.body.style.overflow = 'hidden';
     showInLightbox(item, true, 0);
+    if (!history.state?.lb) Nav.push({ ...history.state, lb: true });
     requestAnimationFrame(() => requestAnimationFrame(() => lightbox.classList.add('is-open')));
     $('lb-close').focus({ preventScroll: true });
 }
 
-function closeLightbox() {
+// Resolves once the image's history entry is gone (navigate only after that).
+function closeLightbox(fromHistory = false) {
     closePicker(true);
     lightbox.classList.remove('is-open');
     document.body.style.overflow = '';
     lbItem = null;
-    if (new URLSearchParams(location.search).has('i')) history.replaceState(null, '', location.pathname);
     lbCloseTimer = setTimeout(() => {
         lightbox.hidden = true;
         lbImg.removeAttribute('src');
     }, 300);
+    const gone = !fromHistory && history.state?.lb ? Nav.back() : Promise.resolve();
+    return gone.then(() => {
+        if (new URLSearchParams(location.search).has('i')) Nav.replace(history.state || { view: 'empty' }, location.pathname);
+    });
 }
 
 function paintLightboxActions() {
@@ -1535,10 +1563,10 @@ function stepLightbox(delta) {
 $('lb-close').addEventListener('click', closeLightbox);
 $('lb-prev').addEventListener('click', () => stepLightbox(-1));
 $('lb-next').addEventListener('click', () => stepLightbox(1));
-$('lb-collect').addEventListener('click', () => {
+$('lb-collect').addEventListener('click', e => {
     if (!lbItem) return;
     const cid = Collections.ensureTarget().id;
-    if (Collections.contains(cid, lbItem)) openItemDialog(lbItem, cid);
+    if (Collections.contains(cid, lbItem)) { e.stopPropagation(); openPicker(e.currentTarget, lbItem, null); }
     else collectInto(cid, lbItem, null);
 });
 $('lb-cover').addEventListener('click', () => { if (lbItem) setCover(lbItem); });
@@ -1547,8 +1575,7 @@ $('lb-collect-menu').addEventListener('click', e => { e.stopPropagation(); if (l
 $('lb-visual').addEventListener('click', () => {
     if (!lbItem) return;
     const item = lbItem;
-    closeLightbox();
-    visualResearch(item);
+    closeLightbox().then(() => visualResearch(item));
 });
 lightbox.addEventListener('click', e => { if (e.target === lightbox || e.target.classList.contains('lb-stage')) closeLightbox(); });
 

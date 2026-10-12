@@ -250,27 +250,32 @@ const Weather = (() => {
     }
 
     // ── Open / close ─────────────────────────────────────────────────────────
-    function open() {
+    // historyMode: 'push' (key M), 'replace' (arriving on ?meteo), 'none' (back/forward).
+    function open(historyMode = 'push') {
         if (view === 'weather') return;
         closeMenu();
-        saved = { view, request: results.request, offset: results.offset, hasMore: results.hasMore,
+        saved = { request: results.request, offset: results.offset, hasMore: results.hasMore,
                   items: results.items, url: new URLSearchParams(location.search).has('meteo') ? '' : location.search };
-        history.replaceState(null, '', '?meteo');
+        if (historyMode === 'push') Nav.push({ view: 'weather' }, '?meteo');
+        else if (historyMode === 'replace') Nav.replace({ view: 'weather' }, '?meteo');
         refresh();
+    }
+
+    // Puts back the search the weather page covered (called by showView on leaving).
+    function leave() {
+        if (!saved) return;
+        Object.assign(results, { request: saved.request, offset: saved.offset, hasMore: saved.hasMore, items: saved.items });
+        saved = null;
     }
 
     function close() {
         if (view !== 'weather') return;
-        const s = saved;
-        saved = null;
-        history.replaceState(null, '', s?.url || location.pathname);
-        if (s && s.request) {
-            Object.assign(results, { request: s.request, offset: s.offset, hasMore: s.hasMore, items: s.items });
-            backToResults();
-        } else {
-            results.request = null;
-            showView('empty');
-        }
+        if (Nav.canGoBack && history.state?.view === 'weather') { history.back(); return; }
+        const url = saved?.url || location.pathname;
+        leave();
+        Nav.replace({ view: results.request ? 'results' : 'empty' }, url);
+        if (results.request) backToResults();
+        else showView('empty');
     }
 
     const typing = target => target.closest?.('input, textarea, select, [contenteditable="true"]');
@@ -302,7 +307,7 @@ const Weather = (() => {
         placeList.querySelector('.weather-place-option')?.click();
     });
 
-    if (new URLSearchParams(location.search).has('meteo')) open();
+    if (new URLSearchParams(location.search).has('meteo')) open('replace');
 
-    return { open, close };
+    return { open, close, leave };
 })();
