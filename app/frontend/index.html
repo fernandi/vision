@@ -8,15 +8,32 @@
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Ctext x='16' y='23' font-family='Arial' font-weight='700' font-size='20' fill='%23fff' text-anchor='middle'%3EG%3C/text%3E%3C/svg%3E">
     <link rel="preload" href="fonts/JunicodeVF-Roman.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="fonts/JunicodeVF-Italic.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="style.css?v=33">
+    <link rel="preload" href="fonts/FlorDeRuina-Semilla.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="style.css?v=34">
     <!-- Hide the page until Junicode has loaded (revealed by app.js); without JS nothing is hidden. -->
     <script>document.documentElement.classList.add('is-booting');</script>
 </head>
 
 <body class="is-landing">
+    <script>
+        // Decided before the first paint, so the menu never flashes in (app.js keeps it up to date).
+        // Computer: the menu is folded behind its star while there is no collection.
+        // Phone: a first visit (nothing collected, no search in the address) opens on the landing alone.
+        (() => {
+            try {
+                const c = JSON.parse(localStorage.getItem('glane.collections') || 'null');
+                if (!c || !c.list.length) document.body.classList.add('menu-folded');
+                const p = new URLSearchParams(location.search);
+                if (['q', 'ref', 'c', 'meteo', 'i'].some(k => p.has(k))) return;
+                if (!c || !c.list.some(x => x.items && x.items.length)) document.body.classList.add('no-menu');
+            } catch { /* private mode: the menu stays */ }
+        })();
+    </script>
+    <!-- Computer: the logo's star folds and unfolds the menu; it stays at the top left when the menu is away. -->
+    <button type="button" id="menu-star" class="menu-star" aria-controls="sidebar" aria-expanded="true"><span class="wm-star" aria-hidden="true"><i>*</i><i>*</i><i>*</i><i>*</i><i>*</i></span></button>
     <aside id="sidebar" class="sidebar">
         <div class="sb-top">
-            <a class="brand" href="./">GLANE</a>
+            <a class="brand" href="./" aria-label="Glane"><span aria-hidden="true">Glane</span><span class="wm-star" aria-hidden="true"><i>*</i><i>*</i><i>*</i><i>*</i><i>*</i></span></a>
             <button id="menu-btn" class="menu-btn" type="button" aria-label="Menu" aria-expanded="false">
                 <span></span><span></span>
             </button>
@@ -25,7 +42,8 @@
         <form id="search-form" class="search" autocomplete="off">
             <div id="search-box" class="search-box">
                 <div id="chips" class="chips"></div>
-                <input type="text" id="search-input" placeholder="Describe an image…" aria-label="Search" data-i18n-placeholder="search.placeholder" data-i18n-aria="search.aria">
+                <span class="filet search-band" data-ambient data-line="0" aria-hidden="true"></span>
+                <input type="text" id="search-input" placeholder="Search for something" aria-label="Search" data-i18n-placeholder="search.placeholder" data-i18n-aria="search.aria">
                 <div class="search-actions">
                     <label for="file-input" class="link-btn file-btn" title="Search with an image from your device" data-i18n-title="search.file.title" data-i18n="search.file">+ IMAGE</label>
                     <input type="file" id="file-input" accept="image/*" multiple hidden>
@@ -41,7 +59,7 @@
         <div id="sb-body" class="sb-body">
             <section class="sb-section">
                 <button type="button" id="settings-toggle" class="sb-heading" aria-expanded="false" aria-controls="settings-panel">
-                    <span data-i18n="settings.title">SETTINGS</span><span id="settings-summary" class="settings-summary"></span><span class="sb-heading-icon">+</span>
+                    <span data-i18n="settings.title">SETTINGS</span><span class="sb-heading-icon star-box" aria-hidden="true"><i>*</i></span>
                 </button>
                 <div id="settings-panel" class="collapsible">
                 <div class="collapsible-inner">
@@ -54,8 +72,7 @@
                     </div>
                     <p id="variety-help" class="settings-help"></p>
 
-                    <div class="settings-label" data-i18n="settings.combine"></div>
-                    <p id="combine-locked" class="settings-help" data-i18n="settings.combine.locked"></p>
+                    <div id="combine-label" class="settings-label" data-i18n="settings.combine"></div>
                     <div id="combine-group" class="mode-group">
                         <label class="mode"><input type="radio" name="combination-mode" value="purified" checked>
                             <svg class="mode-icon" viewBox="0 0 36 22" aria-hidden="true"><circle class="soft" cx="18" cy="11" r="9.5"/><circle class="fill" cx="21" cy="9" r="4.2"/></svg><span class="mode-info"><span class="mode-name" data-i18n="mode.purified"></span><span class="mode-desc" data-i18n="mode.purified.help"></span></span></label>
@@ -78,24 +95,37 @@
                         </div>
                         <p id="negative-help" class="settings-help"></p>
                     </div>
-                </div>
-                </div>
-                </div>
-            </section>
 
-            <section class="sb-section">
-                <button type="button" id="filters-toggle" class="sb-heading" aria-expanded="false" aria-controls="filters-panel">
-                    <span data-i18n="filters.title">FILTERS</span><span id="filters-summary" class="settings-summary"></span><span class="sb-heading-icon">+</span>
-                </button>
-                <div id="filters-panel" class="collapsible">
-                <div class="collapsible-inner">
-                <div class="settings">
-                    <div class="settings-label" data-i18n="filters.period"></div>
-                    <div id="period-filters" class="filter-chips"></div>
-                    <div class="settings-label" data-i18n="filters.technique"></div>
-                    <div id="technique-filters" class="filter-chips"></div>
-                    <p class="settings-help" data-i18n="filters.help"></p>
-                    <button type="button" id="filters-clear" class="link-btn" data-i18n="filters.clear" hidden>CLEAR FILTERS</button>
+                    <div class="settings-label" data-i18n="settings.motion"></div>
+                    <div class="segmented" role="radiogroup">
+                        <label><input type="radio" name="motion" value="on" checked><span data-i18n="settings.motion.on"></span></label>
+                        <label><input type="radio" name="motion" value="off"><span data-i18n="settings.motion.off"></span></label>
+                    </div>
+                    <p class="settings-help" data-i18n="settings.motion.help"></p>
+
+                    <div class="settings-label" data-i18n="settings.hints"></div>
+                    <div class="segmented" role="radiogroup">
+                        <label><input type="radio" name="hints" value="on" checked><span data-i18n="settings.hints.on"></span></label>
+                        <label><input type="radio" name="hints" value="off"><span data-i18n="settings.hints.off"></span></label>
+                    </div>
+                    <!-- Filters: a part of Settings, folded on its own -->
+                    <section class="sb-subsection">
+                        <button type="button" id="filters-toggle" class="sb-heading" aria-expanded="false" aria-controls="filters-panel">
+                            <span data-i18n="filters.title">FILTERS</span><span id="filters-summary" class="settings-summary"></span><span class="sb-heading-icon star-box" aria-hidden="true"><i>*</i></span>
+                        </button>
+                        <div id="filters-panel" class="collapsible">
+                        <div class="collapsible-inner">
+                        <div class="settings">
+                            <div class="settings-label" data-i18n="filters.period"></div>
+                            <div id="period-filters" class="filter-chips"></div>
+                            <div class="settings-label" data-i18n="filters.technique"></div>
+                            <div id="technique-filters" class="filter-chips"></div>
+                            <p class="settings-help" data-i18n="filters.help"></p>
+                            <button type="button" id="filters-clear" class="link-btn" data-i18n="filters.clear" hidden>CLEAR FILTERS</button>
+                        </div>
+                        </div>
+                        </div>
+                    </section>
                 </div>
                 </div>
                 </div>
@@ -107,7 +137,7 @@
                     <button type="button" id="new-collection-btn" class="link-btn" data-i18n="collections.new">+ NEW</button>
                 </div>
                 <ul id="collection-list" class="collection-list"></ul>
-                <p class="sb-note sb-drag-hint" data-i18n="collections.dragHint">Drag an image onto a collection to add it.</p>
+                <p class="sb-note sb-drag-hint" data-i18n="collections.dragHint">Collect an image, or drag it onto a collection.</p>
             </section>
 
             <section class="sb-section sb-account">
@@ -129,9 +159,11 @@
         </div>
     </aside>
 
+
     <main id="main" class="main">
+        <span class="filet fetch-filet" data-ambient aria-hidden="true"></span>
         <div id="view-header" class="view-header" hidden>
-            <button type="button" id="back-btn" class="link-btn" data-i18n="view.back">← RESULTS</button>
+            <button type="button" id="back-btn" class="link-btn" data-i18n="view.back">&lt; Results</button>
             <input type="text" id="collection-name" class="collection-name" aria-label="Collection name" data-i18n-aria="view.collectionName">
             <span id="collection-count" class="view-count"></span>
             <div class="view-actions">
@@ -178,21 +210,27 @@
         </div>
 
         <section id="empty-state" class="landing is-loading" aria-label="Welcome to Glane" data-i18n-aria="landing.aria">
-            <div id="landing-stage" class="landing-stage"></div>
-            <button type="button" id="landing-weather" class="landing-weather" aria-label="Weather in paintings" data-i18n-aria="weather.button.aria">
-                <span id="landing-weather-icon" class="landing-weather-icon" aria-hidden="true"></span>
-                <span id="landing-weather-label" data-i18n="weather.button">WEATHER</span>
-            </button>
-            <div class="landing-center">
+            <div id="landing-field" class="landing-field"></div>
+            <header class="landing-head">
                 <h1 class="wordmark" aria-label="Glane">
-                    <span class="wm-letter" style="--i:0" aria-hidden="true">G</span><span class="wm-letter" style="--i:1" aria-hidden="true">L</span><span class="wm-letter" style="--i:2" aria-hidden="true">A</span><span class="wm-letter" style="--i:3" aria-hidden="true">N</span><span class="wm-letter" style="--i:4" aria-hidden="true">E</span>
+                    <span aria-hidden="true">Glane</span><span class="wm-star" aria-hidden="true"><i>*</i><i>*</i><i>*</i><i>*</i><i>*</i></span>
                 </h1>
-                <div class="landing-progress" aria-hidden="true"><span id="landing-progress-bar"></span></div>
-                <p class="landing-tagline" data-i18n-html="landing.tagline">Search <em>408,000</em> <span class="nowrap">public-domain</span> artworks.</p>
-                <p class="landing-sub" data-i18n="landing.sub">From The Met, the Cleveland Museum of Art, the Art Institute of Chicago and the Smithsonian.
-                    Describe what you are looking for, drop an image, or try a prompt.</p>
+                <p class="landing-tagline"><span data-i18n-html="landing.tagline">Explore the <em>408,000</em> works in the collections of the Metropolitan Museum of Art in New York, the Cleveland Museum of Art, the Art Institute of Chicago and the Smithsonian.</span></p>
+                <button type="button" id="landing-weather" class="landing-weather" aria-label="Weather in paintings" data-i18n-aria="weather.button.aria">
+                    <span id="landing-weather-icon" class="landing-weather-icon" aria-hidden="true"></span>
+                    <span id="landing-weather-label" data-i18n="weather.button">WEATHER</span>
+                </button>
+            </header>
+            <footer class="landing-foot">
+                <form id="landing-search" class="landing-search" role="search" autocomplete="off">
+                    <span class="filet search-band" data-ambient data-line="0" aria-hidden="true"></span>
+                    <input type="text" id="landing-search-input" aria-controls="landing-prompts" aria-expanded="false" placeholder="Search for something" aria-label="Search for something" data-i18n-placeholder="landing.search" data-i18n-aria="landing.search">
+                    <button type="submit" class="landing-search-btn" aria-label="Search" data-i18n-aria="search.aria">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.2" y2="16.2"/></svg>
+                    </button>
+                </form>
                 <div id="landing-prompts" class="suggestions"></div>
-            </div>
+            </footer>
         </section>
 
         <div id="gallery" class="masonry"></div>
@@ -239,9 +277,11 @@
                 <button type="button" id="lb-visual" class="lb-action" data-i18n="lb.visual">VISUAL RESEARCH</button>
                 <button type="button" id="lb-share" class="lb-action" data-i18n="lb.share">SHARE</button>
                 <button type="button" id="lb-cover" class="lb-action" hidden>SET AS COVER</button>
+                <button type="button" id="lb-remove" class="lb-action" data-i18n="lb.remove" hidden>Remove</button>
                 <a id="lb-download" class="lb-action" target="_blank" rel="noopener noreferrer" download data-i18n="lb.download">DOWNLOAD</a>
             </div>
         </div>
+        <span class="filet lb-filet" data-ambient aria-hidden="true"></span>
         <button type="button" id="lb-close" class="lb-close" aria-label="Close" data-i18n-aria="lb.close"></button>
     </div>
 
@@ -249,14 +289,17 @@
 
     <dialog id="dialog" class="dialog"></dialog>
 
+    <div id="tip" class="tip" role="tooltip" hidden><span id="tip-text"></span><span class="filet tip-band" data-ambient aria-hidden="true"></span></div>
+
     <div id="toast" class="toast" role="status" aria-live="polite">
         <span id="toast-text"></span>
         <button type="button" id="toast-action" class="toast-action" hidden></button>
     </div>
 
-    <script src="i18n.js?v=33"></script>
-    <script src="app.js?v=33"></script>
-    <script src="weather.js?v=33"></script>
+    <script src="filets.js?v=34"></script>
+    <script src="i18n.js?v=34"></script>
+    <script src="app.js?v=34"></script>
+    <script src="weather.js?v=34"></script>
 </body>
 
 </html>

@@ -17,9 +17,33 @@
     font-display: swap;
 }
 
+/* Flor de Ruina: Semilla for every text set in it (the logo, the menu
+   headings, the labels) and for the menu's asterisks. The other weights give
+   only their asterisk: Flor for the landing's ornaments, all five for the
+   logo's star. */
+@font-face {
+    font-family: 'Flor Semilla';
+    src: url('fonts/FlorDeRuina-Semilla.woff2') format('woff2');
+    font-display: swap;
+}
+@font-face { font-family: 'Star Semilla'; src: url('fonts/FlorDeRuina-Semilla.woff2') format('woff2'); unicode-range: U+002A; font-display: block; }
+@font-face {
+    font-family: 'Flor Star';
+    src: url('fonts/FlorDeRuina-Flor.woff2') format('woff2');
+    unicode-range: U+002A;
+    font-display: block;
+}
+@font-face { font-family: 'Star Germen'; src: url('fonts/FlorDeRuina-Germen.woff2') format('woff2'); unicode-range: U+002A; font-display: block; }
+@font-face { font-family: 'Flor Plus'; src: url('fonts/FlorDeRuina-Flor.woff2') format('woff2'); unicode-range: U+002B; font-display: block; }   /* the + before the landing text */
+@font-face { font-family: 'Star Ruina'; src: url('fonts/FlorDeRuina-Ruina.woff2') format('woff2'); unicode-range: U+002A; font-display: block; }
+@font-face { font-family: 'Star Fractura'; src: url('fonts/FlorDeRuina-Fractura.woff2') format('woff2'); unicode-range: U+002A; font-display: block; }
+
 /* ── Tokens ───────────────────────────────────────────────────────────────── */
 :root {
     --font: 'Junicode', 'Iowan Old Style', Georgia, serif;
+    --font-title: 'Flor Semilla', 'Junicode', Georgia, serif;
+    --font-star: 'Flor Star', 'Junicode', serif;
+    --font-label: 'Flor Semilla', 'Junicode', Georgia, serif;   /* every label once set in Junicode small capitals, in sentence case */
     --bg: #E3E3E3;
     --panel: #FFFFFF;
     --ink: #000000;
@@ -71,7 +95,7 @@ button { cursor: pointer; background: none; border: 0; -webkit-tap-highlight-col
     font-size: 0.81rem;
     font-weight: 600;
     letter-spacing: 0.07em;
-    font-variant-caps: all-small-caps;
+    font-family: var(--font-label); font-synthesis: none;
     opacity: 0.45;
     padding: 0.2rem 0;
     white-space: nowrap;
@@ -84,7 +108,7 @@ button { cursor: pointer; background: none; border: 0; -webkit-tap-highlight-col
     font-size: 0.81rem;
     font-weight: 600;
     letter-spacing: 0.07em;
-    font-variant-caps: all-small-caps;
+    font-family: var(--font-label); font-synthesis: none;
     background: var(--ink);
     color: #fff;
     border-radius: 999px;
@@ -119,14 +143,19 @@ button { cursor: pointer; background: none; border: 0; -webkit-tap-highlight-col
 }
 
 .brand {
-    font-size: 1.3rem;
-    font-weight: 600;
-    letter-spacing: 0.16em;
+    font-family: var(--font-title);
+    font-size: 1.9rem;
+    font-weight: 400;
+    text-transform: none;          /* written Glane: capital G, Flor de Ruina lower case after it */
+    letter-spacing: 0.02em;
+    text-box: trim-both ex alphabetic;   /* the box is the x-height: lower case centres on the row */
     color: var(--ink);
     text-decoration: none;
     transition: letter-spacing var(--t-mid) var(--ease-out);
 }
-.brand:hover { letter-spacing: 0.24em; }
+.brand:hover { letter-spacing: 0.07em; }
+.brand { display: inline-flex; align-items: flex-start; }
+.brand .wm-star { font-size: 0.5em; margin-left: 0.06em; }
 
 .menu-btn { display: none; }
 
@@ -144,15 +173,38 @@ button { cursor: pointer; background: none; border: 0; -webkit-tap-highlight-col
     font-size: 0.81rem;
     font-weight: 600;
     letter-spacing: 0.07em;
-    font-variant-caps: all-small-caps;
+    font-family: var(--font-label); font-synthesis: none;
 }
 
 .sb-heading { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 0; }
-.sb-heading-icon { font-size: 0.9rem; font-weight: 400; transition: transform var(--t-mid) var(--ease-out); }
-.sb-heading[aria-expanded="true"] .sb-heading-icon { transform: rotate(135deg); }
+/* Menu headings: the title face, capital first letter only (the strings are
+   written in capitals: lower-cased here). Trimmed to the cap height, so in a
+   row centred on the line it is the letters that are centred, not the space
+   reserved for ascenders and descenders. */
+.sb-heading > span:first-child, .sb-label {
+    font-family: var(--font-title);
+    font-size: 1.22rem;
+    font-weight: 400;
+    font-variant-caps: normal;
+    display: inline-block;
+    text-transform: lowercase;
+    letter-spacing: 0.02em;
+    text-box: trim-both cap alphabetic;   /* the box is the capitals: they centre on the row */
+}
+.sb-heading > span:first-child::first-letter, .sb-label::first-letter { text-transform: uppercase; }
+/* Menu stars: a box of one em, the glyph's ink centred in it by app.js, so the
+   star sits on the row's middle and turns around its own centre. */
+.star-box { position: relative; display: inline-block; width: 1em; height: 1em; flex: none; }
+.star-box i { position: absolute; left: 0; top: 0; line-height: 1; font-style: normal; white-space: nowrap; }
+.sb-heading-icon {
+    font-family: 'Star Semilla', var(--font-star); font-size: 1.15rem; font-weight: 400;
+    transition: transform var(--t-slow) var(--ease-out);
+}
+.sb-heading:hover .sb-heading-icon { transform: rotate(45deg); }
+.sb-heading[aria-expanded="true"] .sb-heading-icon { transform: rotate(180deg) scale(0.85); }
 
 .sb-heading-row { display: flex; justify-content: space-between; align-items: center; }
-.sb-note { font-size: 0.8rem; color: var(--muted); margin: 0.5rem 0; line-height: 1.35; }
+.sb-note { font-size: 0.8rem; font-style: italic; color: var(--muted); margin: 0.5rem 0; line-height: 1.35; }
 
 /* Height animation without measuring: grid rows 0fr → 1fr */
 .collapsible {
@@ -190,10 +242,10 @@ button { cursor: pointer; background: none; border: 0; -webkit-tap-highlight-col
     background: transparent;
     font-size: 1.17rem;
     font-weight: 500;
-    font-variant-caps: all-small-caps;
+    font-family: var(--font-label); font-synthesis: none;
     padding: 0.25rem 0.1rem;
 }
-#search-input::placeholder { color: var(--faint); font-style: italic; font-variant-caps: normal; letter-spacing: 0; transition: opacity var(--t-fast); }
+#search-input::placeholder { color: var(--faint);transition: opacity var(--t-fast); }
 #search-input:focus::placeholder { opacity: 0.5; }
 
 .search-actions { flex: 1 1 100%; display: flex; justify-content: flex-end; align-items: center; gap: 0.9rem; }
@@ -278,7 +330,7 @@ button { cursor: pointer; background: none; border: 0; -webkit-tap-highlight-col
 }
 .toggle[aria-pressed="true"] .toggle-track { background: var(--ink); }
 .toggle[aria-pressed="true"] .toggle-thumb { transform: translateX(12px); }
-.toggle-label { font-size: 0.88rem; font-weight: 600; letter-spacing: 0.06em; font-variant-caps: all-small-caps; transition: opacity var(--t-fast); }
+.toggle-label { font-size: 0.88rem; font-weight: 600; letter-spacing: 0.06em; font-family: var(--font-label); font-synthesis: none; transition: opacity var(--t-fast); }
 .toggle[aria-pressed="false"] .toggle-label { opacity: 0.45; }
 
 .mode-group { display: flex; flex-direction: column; }
@@ -298,17 +350,21 @@ button { cursor: pointer; background: none; border: 0; -webkit-tap-highlight-col
 .mode:has(input:focus-visible) { outline: 2px solid var(--ink); }
 .mode-symbol { width: 1.2em; text-align: center; font-size: 1rem; line-height: 1; }
 .mode-info { display: flex; flex-direction: column; }
-.mode-name { font-size: 0.86rem; font-weight: 600; letter-spacing: 0.05em; font-variant-caps: all-small-caps; }
+.mode-name { font-size: 0.86rem; font-weight: 600; letter-spacing: 0.05em; font-family: var(--font-label); font-synthesis: none; }
 .mode-desc { font-size: 0.74rem; font-style: italic; color: var(--muted); }
 
 /* Settings: plain-language choices, each with a one-line explanation. */
+/* Trimmed to the x-height then padded back evenly: centred on the row, and
+   nothing clipped by the summary's overflow. */
+.settings-summary, .sb-heading-row .link-btn { text-box: trim-both ex alphabetic; padding-block: 0.35em; }
 .settings-summary {
     flex: 1;
     margin: 0 0.6rem;
     font-size: 0.8rem;
     font-weight: 400;
+    font-family: var(--font);   /* a note, not a label: Junicode italic */
     font-style: italic;
-    font-variant-caps: normal;
+    text-transform: none;
     letter-spacing: 0;
     color: var(--muted);
     text-align: right;
@@ -355,6 +411,8 @@ button { cursor: pointer; background: none; border: 0; -webkit-tap-highlight-col
 .filter-chips input:focus-visible + span { outline: 2px solid var(--ink); outline-offset: 1px; }
 #filters-clear { margin-top: 0.2rem; }
 .mode-group.is-locked { opacity: 0.3; pointer-events: none; filter: grayscale(1); }
+.mode-group[hidden] { display: none; }
+.settings-label.is-unavailable { opacity: 0.45; cursor: help; }   /* its note shows on hover (Tip) */
 .mode-desc { white-space: normal; }
 
 /* ── Collections ──────────────────────────────────────────────────────── */
@@ -372,6 +430,7 @@ button { cursor: pointer; background: none; border: 0; -webkit-tap-highlight-col
     margin: 0 -0.45rem;
     padding: 0.35rem 0.45rem;
     border-radius: 4px;
+    background: #EDEDED;           /* light grey block; black at 80 % once selected */
     text-align: left;
     outline: 2px dashed transparent;
     outline-offset: 1px;
@@ -380,6 +439,7 @@ button { cursor: pointer; background: none; border: 0; -webkit-tap-highlight-col
                 transform var(--t-mid) var(--ease-out), outline-color var(--t-fast);
 }
 .collection-item:hover { background: var(--bg); }
+.collection-list { gap: 6px; }
 .collection-cover {
     width: 34px;
     height: 34px;
@@ -388,11 +448,13 @@ button { cursor: pointer; background: none; border: 0; -webkit-tap-highlight-col
     background: var(--bg) center / cover no-repeat;
     transition: width var(--t-slow) var(--ease-out), height var(--t-slow) var(--ease-out), background-color var(--t-mid);
 }
-.collection-text { display: flex; flex-direction: column; min-width: 0; }
+/* The title on the left, the count on the right of the same line. */
+.collection-text { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 0.6rem; align-items: baseline; }
+.collection-kicker { grid-column: 1 / -1; }
 .collection-kicker {
     font-size: 0.74rem;
     font-weight: 600;
-    font-variant-caps: all-small-caps;
+    font-family: var(--font-label); font-synthesis: none;
     letter-spacing: 0.07em;
     max-height: 0;
     opacity: 0;
@@ -400,19 +462,20 @@ button { cursor: pointer; background: none; border: 0; -webkit-tap-highlight-col
     transition: max-height var(--t-slow) var(--ease-out), opacity var(--t-mid) ease;
 }
 .collection-title {
-    font-size: 0.9rem;
-    font-weight: 500;
+    font-size: 0.95rem;
+    font-style: italic;
+    font-weight: 400;
     line-height: 1.15;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     transition: font-size var(--t-slow) var(--ease-out);
 }
-.collection-meta { font-size: 0.76rem; font-style: italic; color: var(--muted); transition: color var(--t-mid); }
+.collection-meta { font-size: 0.76rem; font-style: italic; color: var(--muted); white-space: nowrap; transition: color var(--t-mid); }
 
 .collection-row.is-viewing .collection-item { background: var(--bg); }
-.collection-row.is-target .collection-item { background: var(--ink); color: #fff; min-height: 100px; padding: 0.65rem; }
-.collection-row.is-target .collection-cover { width: 72px; height: 72px; background-color: #2a2a2a; }
+.collection-row.is-target .collection-item { background: rgba(0, 0, 0, 0.8); color: #fff; min-height: 100px; padding: 0.65rem 0.65rem 0.95rem; }
+.collection-row.is-target .collection-cover { width: 72px; height: 72px; background-color: rgba(255, 255, 255, 0.12); }
 .collection-row.is-target .collection-kicker { max-height: 1.4em; opacity: 0.55; margin-bottom: 0.15rem; }
 .collection-row.is-target .collection-title {
     font-size: 1.25rem;
@@ -425,13 +488,12 @@ button { cursor: pointer; background: none; border: 0; -webkit-tap-highlight-col
     -webkit-box-orient: vertical;
 }
 .collection-row.is-target .collection-meta { color: rgba(255, 255, 255, 0.6); }
-.collection-row.bump .collection-item { animation: bump 520ms var(--ease-spring); }
 
 /* Drag & drop of an image onto a collection */
 body.is-dragging .collection-item, body.is-dragging #new-collection-btn { outline-color: var(--faint); }
 body.is-dragging #new-collection-btn { opacity: 1; outline: 2px dashed var(--faint); outline-offset: 3px; border-radius: 3px; }
 .collection-row.drop-hover .collection-item { outline-color: var(--ink); transform: scale(1.03); background: #D6D6D6; }
-.collection-row.is-target.drop-hover .collection-item { background: #222; outline-color: var(--ink); }
+.collection-row.is-target.drop-hover .collection-item { background: rgba(0, 0, 0, 0.88); outline-color: var(--ink); }
 #new-collection-btn.drop-hover { outline-color: var(--ink) !important; transform: scale(1.1); }
 
 /* ── Account ─────────────────────────────────────────────────────────────── */
@@ -457,7 +519,7 @@ body.is-dragging #new-collection-btn { opacity: 1; outline: 2px dashed var(--fai
 /* ── Main area ───────────────────────────────────────────────────────────── */
 .main {
     margin-left: var(--sidebar-w);
-    padding: var(--gap) var(--gap) 3rem;
+    padding: var(--gap) var(--gap) 3rem var(--gap);
     min-height: 100vh;
     transition: opacity var(--t-mid) ease;
 }
@@ -465,7 +527,7 @@ body.is-dragging #new-collection-btn { opacity: 1; outline: 2px dashed var(--fai
 .nowrap { white-space: nowrap; }
 .suggestions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .suggestion {
-    font-variant-caps: all-small-caps;
+    font-family: var(--font-label); font-synthesis: none;
     font-size: 0.86rem;
     font-weight: 600;
     letter-spacing: 0.07em;
@@ -482,86 +544,79 @@ body.is-dragging #new-collection-btn { opacity: 1; outline: 2px dashed var(--fai
 /* The landing fits the window exactly: no page scroll while it is shown. */
 body.is-landing { overflow: hidden; }
 body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hidden; }
-@media (max-height: 720px) { .landing-sub { display: none; } }
+/* The landing is a field of book spines of stretched pixels filling the whole
+   frame; on top of it, the wordmark (top left) and, in the middle, the text,
+   the search bar and the prompts, in white. No shade behind them. */
 .landing {
     position: relative;
     height: calc(100dvh - 2 * var(--gap));
-    display: grid;
-    place-items: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: clamp(1rem, 2.4vw, 2rem);
     overflow: hidden;
-    isolation: isolate;
+    border-radius: var(--radius);
 }
-.landing-center {
-    position: relative;
-    z-index: 2;
+/* The text lets the pointer through to the rectangles, except where it is a control. */
+.landing-head, .landing-foot { position: relative; z-index: 3; pointer-events: none; }
+.landing-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5rem; }
+.landing-foot {
+    position: absolute; left: 50%; top: 52%; transform: translate(-50%, -50%);
+    width: min(46rem, calc(100% - 2 * clamp(1rem, 2.4vw, 2rem)));
+    display: flex; flex-direction: column; align-items: center; gap: 1.1rem;
     text-align: center;
-    padding: 2rem 1.5rem;
-    width: min(52rem, 100%);
 }
-/* Soft halo keeps the text readable over the floating images. */
-.landing-center::before {
-    content: '';
-    position: absolute;
-    inset: -12% -18%;
-    z-index: -1;
-    background: radial-gradient(closest-side, var(--bg) 55%, rgba(227, 227, 227, 0) 100%);
-    pointer-events: none;
-}
+.landing-weather, #landing-prompts { pointer-events: auto; }
+.landing .wordmark, .landing-tagline { position: relative; z-index: 3; color: var(--ink); }   /* on the empty first shelves, in ink */
 
-/* Wordmark: the capitals track in (spacing tightens) while each letter
-   surfaces from a blur; then the weight breathes softly while images load. */
+/* Wordmark: GLANE in the title face, still, with the Flor asterisk as a
+   footnote mark that the text below answers. */
 .wordmark {
     display: flex;
-    justify-content: center;          /* stays centred even while wider than its box */
-    font-size: clamp(3.2rem, min(8.6vw, 16vh), 9rem);
+    align-items: flex-start;
+    font-family: var(--font-title);
+    font-size: clamp(3.4rem, min(8.4vw, 15vh), 8.6rem);
     font-weight: 400;
-    line-height: 0.95;
-    letter-spacing: 0.14em;
-    padding-left: 0.14em;             /* balances the space after the last letter */
+    line-height: 0.9;
+    text-transform: none;          /* written Glane in the markup */
+    letter-spacing: 0;
     white-space: nowrap;
     user-select: none;
-    animation: wmTrack 2.6s cubic-bezier(0.22, 1, 0.36, 1) both 0.1s;
 }
-.wm-letter {
-    display: inline-block;
-    font-variation-settings: 'wght' 420, 'wdth' 104;
-    animation: wmIn 1.9s cubic-bezier(0.22, 1, 0.36, 1) both;
-    animation-delay: calc(var(--i) * 120ms + 150ms);
-    transition: font-variation-settings 900ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.landing.is-loading .wm-letter,
-.wm-letter.is-waving {
-    animation: wmIn 1.9s cubic-bezier(0.22, 1, 0.36, 1) both, wmBreathe 3.4s ease-in-out infinite;
-    animation-delay: calc(var(--i) * 120ms + 150ms), calc(var(--i) * 260ms + 1.6s);
-}
-.landing:not(.is-loading) .wm-letter:hover { font-variation-settings: 'wght' 560, 'wdth' 110; }
-
-@keyframes wmTrack {
-    from { letter-spacing: 0.5em; padding-left: 0.5em; }
-    to { letter-spacing: 0.14em; padding-left: 0.14em; }
-}
-@keyframes wmIn {
-    from { opacity: 0; filter: blur(10px); transform: translateY(0.1em); }
-    to { opacity: 1; filter: blur(0); transform: none; }
-}
-/* Starts and ends on the resting axes, so a letter can stop at the end of any cycle. */
-@keyframes wmBreathe {
-    0%, 100% { font-variation-settings: 'wght' 420, 'wdth' 104; }
-    50% { font-variation-settings: 'wght' 560, 'wdth' 112; }
-}
+.wm-star { position: relative; display: inline-block; width: 0.62em; height: 1em; font-size: 0.42em; line-height: 1; margin-left: 0.08em; }
+/* The star thickens through the five weights, holds, thins back, holds:
+   crisp swaps (cross-fading two dot screens would blur them). Without
+   animation, the Flor star stays. */
+/* Each weight draws its asterisk at another place in its em box: app.js
+   measures the ink of each and shifts it onto the same centre. */
+.wm-star i { position: absolute; left: 0; top: 0; font-style: normal; white-space: nowrap; opacity: 0; animation: 7s infinite; }
+.wm-star i:nth-child(1) { font-family: 'Star Germen', var(--font-star); animation-name: starGermen; }
+.wm-star i:nth-child(2) { font-family: 'Star Semilla', var(--font-star); animation-name: starSemilla; }
+.wm-star i:nth-child(3) { font-family: var(--font-star); animation-name: starFlor; opacity: 1; }
+.wm-star i:nth-child(4) { font-family: 'Star Ruina', var(--font-star); animation-name: starRuina; }
+.wm-star i:nth-child(5) { font-family: 'Star Fractura', var(--font-star); animation-name: starFractura; }
+html.motion-off .wm-star i { animation: none; }
+@keyframes starGermen   { 0%, 6.66% { opacity: 1; } 6.67%, 69.99% { opacity: 0; } 70%, 100% { opacity: 1; } }
+@keyframes starSemilla  { 0%, 6.66% { opacity: 0; } 6.67%, 13.32% { opacity: 1; } 13.33%, 63.32% { opacity: 0; } 63.33%, 69.99% { opacity: 1; } 70%, 100% { opacity: 0; } }
+@keyframes starFlor     { 0%, 13.32% { opacity: 0; } 13.33%, 19.99% { opacity: 1; } 20%, 56.66% { opacity: 0; } 56.67%, 63.32% { opacity: 1; } 63.33%, 100% { opacity: 0; } }
+@keyframes starRuina    { 0%, 19.99% { opacity: 0; } 20%, 26.66% { opacity: 1; } 26.67%, 49.99% { opacity: 0; } 50%, 56.66% { opacity: 1; } 56.67%, 100% { opacity: 0; } }
+@keyframes starFractura { 0%, 26.66% { opacity: 0; } 26.67%, 49.99% { opacity: 1; } 50%, 100% { opacity: 0; } }
+.landing-tagline::before { content: '+'; font-family: 'Flor Plus', var(--font-star); font-size: 0.85em; margin-right: 0.35em; }
 
 .landing-progress {
+    position: absolute;
+    left: 0;
+    bottom: -0.6rem;
     width: min(14rem, 60%);
-    height: 1px;
-    margin: 1.4rem auto 0;
-    background: var(--line);
+    height: 3px;
+    background: rgba(255, 255, 255, 0.3);
     overflow: hidden;
     transition: opacity 900ms ease 400ms;
 }
 .landing-progress span {
     display: block;
     height: 100%;
-    background: var(--ink);
+    background: #fff;
     transform: scaleX(var(--p, 0));
     transform-origin: left;
     transition: transform 500ms var(--ease-out);
@@ -569,38 +624,90 @@ body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hi
 .landing:not(.is-loading) .landing-progress { opacity: 0; }
 
 .landing-tagline {
-    margin-top: 1.4rem;
-    font-size: clamp(1.35rem, 2.6vw, 2.1rem);
-    line-height: 1.15;
-    animation: slideUp var(--t-slow) var(--ease-out) both 700ms;
+    margin: 0;
+    font-size: clamp(1.1rem, 1.6vw, 1.5rem);
+    line-height: 1.3;
+    text-wrap: pretty;
 }
-.landing-tagline em { font-weight: 300; }
-.landing-sub {
-    margin: 0.9rem auto 0;
-    max-width: 32rem;
-    color: var(--muted);
-    font-size: 1rem;
-    animation: slideUp var(--t-slow) var(--ease-out) both 850ms;
-}
-#landing-prompts { justify-content: center; margin-top: 1.7rem; }
-#landing-prompts .suggestion { animation: slideUp var(--t-slow) var(--ease-out) both; animation-delay: calc(1000ms + var(--i, 0) * 70ms); }
+.landing-tagline em { font-style: normal; }   /* the figure in roman */
+/* Arrival, once the thumbnails are in: the spines first (their own fade in
+   app.js/.lcell), then the wordmark, the text, the search bar. */
+.landing.is-loading .landing-head > *, .landing.is-loading .landing-foot > *, .landing.is-loading .suggestion { opacity: 0; }
+.landing:not(.is-loading) .wordmark { animation: slideUp 900ms var(--ease-out) both 1100ms; }
+.landing:not(.is-loading) .landing-weather { animation: fadeIn 700ms ease both 1300ms; }
+.landing:not(.is-loading) .landing-tagline { animation: slideUp 900ms var(--ease-out) both 1500ms; }
+.landing:not(.is-loading) .landing-search { animation: slideUp 900ms var(--ease-out) both 1900ms; }
+/* The arrival plays once: shown again later (the menu folds, the visitor
+   comes back), they are there at once. */
+.landing.has-arrived .landing-head > *, .landing.has-arrived .landing-foot > * { animation: none; }
 
-/* Floating images */
-.landing-stage { position: absolute; inset: 0; z-index: 1; --mx: 0; --my: 0; }
+/* The field (Landing in app.js): shelves of book spines, each its image's
+   centre column stretched across it. A click pulls the image out sideways
+   from behind the spine, over its neighbours: the shelf's height, its own
+   proportions, nothing enlarged. */
+.landing-field { position: absolute; inset: 0; display: grid; }
+.lcell { position: relative; padding: 0; border: 0; border-radius: 1px; background: rgba(0, 0, 0, 0.06); cursor: pointer; }
+.lcell.is-open { cursor: zoom-in; }   /* open: a click shows it full page */
+.lcell-band {
+    position: absolute; inset: 0; border-radius: inherit; background-repeat: no-repeat;
+    opacity: 0; transition: opacity 800ms ease var(--d, 0ms);
+}
+.lcell.is-ready .lcell-band { opacity: 1; }
+/* The drawer sits beside the spine; the photo slides out of it from the
+   spine's side, as if pulled from behind the spine. */
+.lcell-drawer {
+    position: absolute; top: 0; left: 100%; height: 100%;
+    overflow: hidden; pointer-events: none;
+}
+.lcell-drawer.to-left { left: auto; right: 100%; }
+.lcell-photo {
+    display: block; width: 100%; height: 100%; max-width: none; object-fit: cover;
+    transform: translateX(-101%);
+    /* Tucked away it is also hidden: when the field changes width (the menu
+       folds), a drawer may switch sides, and its photo must not cross over. */
+    visibility: hidden;
+    transition: transform 560ms cubic-bezier(0.16, 1, 0.3, 1), visibility 0s linear 560ms;
+}
+.lcell-drawer.to-left .lcell-photo { transform: translateX(101%); }
+.lcell.is-open { z-index: 2; }   /* above the other spines, under the text */
+.lcell.is-open .lcell-drawer { pointer-events: auto; }
+.lcell.is-open .lcell-photo { transform: none; visibility: visible; transition: transform 560ms cubic-bezier(0.16, 1, 0.3, 1); }
+.lcell:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* The landing's search bar, above the prompts. */
+.landing-search {
+    position: relative; --ph: 3.1rem;
+    pointer-events: auto;
+    display: flex; align-items: center; gap: 0.5rem;
+    width: min(36rem, 100%);
+    padding: 0.3rem 0.3rem 0.3rem 1.15rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.96);
+    color: var(--ink);
+}
+.landing-search .search-band { height: 4px; }
+.landing-search:focus-within .search-band { height: 6px; }
+.landing-search input { flex: 1; min-width: 0; border: 0; background: none; outline: none; font-size: 1.17rem; font-weight: 500; font-family: var(--font-label); font-synthesis: none; padding: 0.45rem 0; }
+.landing-search input::placeholder { color: var(--muted); }
+.landing-search-btn {
+    flex: none; width: 40px; height: 40px; border-radius: 50%; margin-right: 0.2rem;
+    display: grid; place-items: center;
+    background: var(--ink); color: #fff;
+    transition: transform var(--t-fast) var(--ease-out);
+}
+.landing-search-btn:hover { transform: scale(1.06); }
+.landing-search-btn:active { transform: scale(0.94); }
 
 /* Weather: its own small button in the corner, apart from the prompt suggestions. */
 .landing-weather {
-    position: absolute;
-    top: 0.4rem;
-    right: 0.4rem;
-    z-index: 3;
+    flex: none;
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
     padding: 0.45rem 0.85rem 0.45rem 0.7rem;
     border-radius: 999px;
     background: var(--panel);
-    font-variant-caps: all-small-caps;
+    font-family: var(--font-label); font-synthesis: none;
     font-size: 0.86rem;
     font-weight: 600;
     letter-spacing: 0.07em;
@@ -614,70 +721,10 @@ body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hi
 .landing-weather-icon { display: flex; }
 .landing-weather-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .landing-weather-temp { font-variant-caps: normal; font-weight: 400; letter-spacing: 0; }
-.float-card {
-    position: absolute;
-    left: var(--x);
-    top: var(--y);
-    width: var(--w);
-    padding: 0;
-    cursor: zoom-in;
-    transform: translate3d(calc(var(--mx) * var(--depth) * 1px), calc(var(--my) * var(--depth) * 1px), 0);
-    opacity: 0;
-    pointer-events: none;
-}
-.landing:not(.is-loading) .float-card {
-    pointer-events: auto;
-    animation: floatIn 1.2s var(--ease-out) both;
-    animation-delay: calc(var(--n) * 90ms);
-}
-.float-inner {
-    display: block;
-    animation: drift var(--dur) var(--ease-in-out) infinite alternate;
-    animation-delay: calc(var(--n) * -1.3s);
-}
-.float-card img {
-    display: block;
-    width: 100%;
-    aspect-ratio: 1 / var(--ratio, 1.2);
-    object-fit: cover;
-    border-radius: var(--radius);
-    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(0, 0, 0, 0.08);
-    transition: transform 700ms var(--ease-out), box-shadow 700ms var(--ease-out), opacity 320ms ease, filter 320ms ease;
-}
-.float-card:hover { z-index: 3; }
-.float-card:hover img { transform: scale(1.07); box-shadow: 0 28px 60px rgba(0, 0, 0, 0.24), 0 4px 10px rgba(0, 0, 0, 0.1); }
-.float-card.swap-out img { opacity: 0; transform: scale(0.9); filter: blur(8px); }
-.float-card .float-title {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: calc(100% + 0.45rem);
-    font-size: 0.8rem;
-    font-style: italic;
-    line-height: 1.2;
-    text-align: left;
-    opacity: 0;
-    transform: translateY(-4px);
-    transition: opacity var(--t-mid) ease, transform var(--t-mid) var(--ease-out);
-    pointer-events: none;
-}
-.float-card:hover .float-title { opacity: 1; transform: none; }
-
-@keyframes floatIn {
-    from { opacity: 0; transform: translate3d(0, 40px, 0) scale(0.86); filter: blur(10px); }
-    to { opacity: 1; filter: none; }
-}
-@keyframes drift {
-    from { transform: translate3d(0, -10px, 0) rotate(calc(var(--rot) * -1deg)); }
-    to { transform: translate3d(0, 12px, 0) rotate(calc(var(--rot) * 1deg)); }
-}
 
 @media (max-width: 860px) {
     .landing { height: calc(100dvh - var(--topbar-h, 120px) - 16px); }
-    .float-card { width: calc(var(--w) * 1.9); }
-    .float-card:nth-child(n + 7) { display: none; }
-    .landing-stage { opacity: 0.55; }
-    .landing-center { padding: 1.5rem 0.5rem; }
+    .landing-foot { align-items: stretch; }
 }
 
 .view-header {
@@ -733,7 +780,7 @@ body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hi
     animation: slideUp 600ms var(--ease-out) both;
 }
 .weather-sentence.is-loading { color: var(--muted); font-style: italic; }
-.weather-place { font-variant-caps: all-small-caps; letter-spacing: 0.05em; }
+.weather-place { font-family: var(--font-label); font-synthesis: none; letter-spacing: 0.05em; }
 .weather-words { font-style: italic; }
 .weather-meta { margin-top: 0.6rem; font-size: 0.95rem; font-style: italic; color: var(--muted); min-height: 1.3em; }
 .weather-place-form { margin-top: 1.2rem; max-width: 34rem; animation: slideUp var(--t-mid) var(--ease-out) both; }
@@ -784,10 +831,12 @@ body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hi
 
 .card {
     position: relative;
+    container: card / size;   /* sized by its aspect-ratio (set in app.js): the hover content adapts to it */
     animation: cardIn var(--t-slow) var(--ease-out) both;
     animation-delay: calc(min(var(--i, 0), 12) * 45ms);
 }
 .card.leaving { animation: cardOut var(--t-mid) var(--ease-in-out) forwards; pointer-events: none; }
+.card.is-settled:not(.leaving), .card.is-settled .card-img img { animation: none; }   /* moved to another column (app.js, build) */
 
 .card-img {
     position: relative;
@@ -810,7 +859,6 @@ body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hi
     animation: imgReveal 900ms var(--ease-out) both;
     animation-delay: calc(min(var(--i, 0), 12) * 45ms);
 }
-.card:hover .card-img img { transform: scale(1.04); }
 
 .card-overlay {
     position: absolute;
@@ -846,11 +894,29 @@ body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hi
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
-.card-author { font-size: 0.8rem; font-variant-caps: all-small-caps; letter-spacing: 0.04em; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-author { font-size: 0.8rem; font-family: var(--font-label); font-synthesis: none; letter-spacing: 0.04em; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; }
 
+/* Short thumbnails (wide images): the hover content tightens instead of
+   spilling out of the card. Visual research keeps its icon (and its label for
+   screen readers via aria-label). */
+@container card (max-height: 240px) {
+    .card-bottom { gap: 0.3rem; }
+    .card-title { -webkit-line-clamp: 1; line-clamp: 1; }
+    .card-actions { flex-wrap: nowrap; }
+    .card-actions > .card-btn .card-btn-label { display: none; }
+}
+@container card (max-height: 170px) {
+    .card-author { display: none; }
+}
+@container card (max-height: 120px) {
+    .card-title { display: none; }
+    .card-top { display: none; }
+    .card-similar { display: none; }
+}
+
 .card-btn {
-    font-variant-caps: all-small-caps;
+    font-family: var(--font-label); font-synthesis: none;
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
@@ -900,7 +966,7 @@ body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hi
 .card-icon-btn.on { background: #fff; color: var(--ink); }
 
 .card-similar {
-    font-variant-caps: all-small-caps;
+    font-family: var(--font-label); font-synthesis: none;
     position: absolute;
     top: 0.5rem;
     left: 0.5rem;
@@ -980,7 +1046,7 @@ body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hi
     padding: 0.7rem 4rem 0.7rem 1.5rem;
     border-bottom: 1px solid var(--line);
 }
-.lb-similar-label { font-size: 0.81rem; font-weight: 600; letter-spacing: 0.07em; opacity: 0.55; white-space: nowrap; }
+.lb-similar-label { font-family: var(--font-label); font-synthesis: none; font-size: 0.81rem; font-weight: 600; letter-spacing: 0.07em; opacity: 0.55; white-space: nowrap; }
 .lb-similar-strip { display: flex; gap: 0.4rem; overflow-x: auto; scrollbar-width: none; padding: 3px; }
 .lb-similar-strip::-webkit-scrollbar { display: none; }
 .lb-thumb {
@@ -1032,7 +1098,7 @@ body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hi
 .lb-bar { display: flex; align-items: flex-end; justify-content: space-between; gap: 2rem; padding: 1.2rem 2rem 1.6rem; }
 .lb-meta { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; max-width: 60%; }
 .lb-title { font-weight: 400; font-style: italic; font-size: clamp(1.15rem, 2vw, 1.6rem); line-height: 1.1; }
-.lb-sub { display: flex; flex-wrap: wrap; gap: 0.3rem 1.8rem; font-variant-caps: all-small-caps; font-size: 0.94rem; font-weight: 500; }
+.lb-sub { display: flex; flex-wrap: wrap; gap: 0.3rem 1.8rem; font-family: var(--font-label); font-synthesis: none; font-size: 0.94rem; font-weight: 500; }
 #lb-museum { color: var(--ink); text-decoration: none; background: linear-gradient(currentColor, currentColor) 0 100% / 100% 1px no-repeat; transition: background-size var(--t-mid) var(--ease-out); }
 #lb-museum:hover { background-size: 0 1px; background-position: 100% 100%; }
 #lb-museum:not([href]) { background: none; pointer-events: none; }
@@ -1042,7 +1108,7 @@ body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hi
 .lb-action {
     font-size: clamp(1rem, 1.5vw, 1.2rem);
     font-weight: 600;
-    font-variant-caps: all-small-caps;
+    font-family: var(--font-label); font-synthesis: none;
     letter-spacing: 0.06em;
     color: var(--ink);
     text-decoration: none;
@@ -1085,21 +1151,23 @@ body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hi
     max-height: min(420px, 70vh);
     overflow-y: auto;
     background: var(--panel);
-    border-radius: 6px;
+    border-radius: var(--radius);
     padding: 0.5rem;
     box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
     transform-origin: var(--origin, top left);
     animation: popoverIn var(--t-mid) var(--ease-out) both;
 }
 .picker.closing { animation: popoverOut var(--t-fast) ease forwards; }
-.picker-label { padding: 0.35rem 0.45rem 0.45rem; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.07em; opacity: 0.45; }
+/* Set as the menu's collections: label in the title face, names in italic,
+   counts in small italic. */
+.picker-label { padding: 0.35rem 0.45rem 0.45rem; font-family: var(--font-label); font-synthesis: none; font-size: 0.86rem; letter-spacing: 0.02em; color: var(--muted); }
 .picker-item {
     width: 100%;
     display: flex;
     align-items: center;
     gap: 0.6rem;
     padding: 0.4rem 0.45rem;
-    border-radius: 4px;
+    border-radius: var(--radius);
     text-align: left;
     transition: background var(--t-fast);
     animation: slideUp var(--t-mid) var(--ease-out) both;
@@ -1109,9 +1177,10 @@ body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hi
 .picker-cover { width: 30px; height: 30px; flex-shrink: 0; border-radius: var(--radius); background: var(--bg) center / cover no-repeat; }
 .picker-new .picker-cover { display: flex; align-items: center; justify-content: center; font-size: 1rem; background: var(--bg); }
 .picker-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.picker-name { font-size: 0.86rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.picker-meta { font-size: 0.74rem; color: var(--muted); }
-.picker-mark { font-size: 0.7rem; font-weight: 700; }
+.picker-name { font-size: 0.95rem; font-style: italic; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.picker-new .picker-name { font-family: var(--font-label); font-synthesis: none; font-style: normal; font-size: 0.86rem; }
+.picker-meta { font-size: 0.76rem; font-style: italic; color: var(--muted); }
+.picker-mark { font-size: 0.76rem; font-style: italic; }
 .picker-check {
     width: 18px;
     height: 18px;
@@ -1179,11 +1248,141 @@ body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hi
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
-.toast-action { color: #fff; font-size: 0.83rem; font-weight: 600; letter-spacing: 0.07em; opacity: 0.7; text-decoration: underline; text-underline-offset: 3px; }
+.toast-action { color: #fff; font-family: var(--font-label); font-synthesis: none; font-size: 0.83rem; font-weight: 600; letter-spacing: 0.07em; opacity: 0.7; text-decoration: underline; text-underline-offset: 3px; }
 .toast-action:hover { opacity: 1; }
 
-/* Image flying from a card to the "Collecting into" block */
-.fly-ghost { position: fixed; z-index: 950; pointer-events: none; object-fit: cover; border-radius: var(--radius); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25); }
+/* ── Bands of stretched pixels (filets.js) ───────────────────────────────────
+   One line of a real artwork's pixels, stretched across the band's thickness.
+   Images are never distorted; only single lines of pixels are stretched. */
+.filet { display: block; position: relative; overflow: hidden; }
+.filet > i { position: absolute; inset: 0; }
+
+/* Ambient: the colours of the current search, image or collection. */
+.search-box { position: relative; overflow: hidden; }
+.search-band { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; transition: height var(--t-mid) var(--ease-out); }
+.search-box:focus-within .search-band { height: 5px; }
+.lb-filet { flex: none; height: 7px; margin: 0; opacity: 0; transition: opacity var(--t-slow) ease 120ms; }   /* at the foot of the screen, under the image's details */
+.lightbox.is-open .lb-filet { opacity: 1; }
+.fetch-filet {
+    position: fixed; top: 0; left: var(--sidebar-w); right: 0; height: 4px; z-index: 120;
+    opacity: 0; transform: scaleX(0); transform-origin: left;
+    transition: opacity var(--t-mid) ease;
+    pointer-events: none;
+}
+body.is-fetching .fetch-filet { opacity: 1; animation: fetchRun 1.6s cubic-bezier(0.65, 0, 0.35, 1) infinite; }
+@keyframes fetchRun {
+    0% { transform: scaleX(0); transform-origin: left; }
+    50% { transform: scaleX(1); transform-origin: left; }
+    50.01% { transform: scaleX(1); transform-origin: right; }
+    100% { transform: scaleX(0); transform-origin: right; }
+}
+
+/* Cards: on hover the image's lowest line of pixels runs out of its lower
+   edge, with no seam, into the gap before the next card. */
+.card-band {
+    position: absolute; left: 0; right: 0; top: calc(100% - 1px); height: 13px; z-index: 2;
+    background-repeat: no-repeat;
+    border-radius: 0 0 var(--radius) var(--radius);
+    clip-path: inset(0 0 100% 0);
+    transition: clip-path 560ms var(--ease-out);
+    pointer-events: none;
+}
+.card:hover .card-band { clip-path: inset(0 0 0 0); }
+.card.is-collecting .card-band { visibility: hidden; }
+
+/* Collections: a band at the base of each block, as under the search field:
+   one row of pixels from each of its images, side by side, oldest on the left,
+   so it grows as images are collected. Thicker under the selected one. */
+.collection-item, .picker-item { position: relative; }
+.collection-band {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+    display: flex; overflow: hidden; border-radius: 0 0 4px 4px;
+    transition: height var(--t-mid) var(--ease-out);
+    pointer-events: none;
+}
+.collection-band > i { flex: 1 1 0; min-width: 0; height: 100%; }
+.collection-band > i.is-waiting { visibility: hidden; }
+.collection-row.is-target .collection-band, .picker-item.is-target .collection-band { height: 7px; }
+
+/* Gestures */
+.filet-fold { position: fixed; z-index: 950; pointer-events: none; background-repeat: no-repeat; border-radius: var(--radius); }
+
+@media (max-width: 860px) {
+    .fetch-filet { left: 0; }
+}
+/* ── Bevelled buttons ────────────────────────────────────────────────────────
+   Buttons are plain rectangles, no outline: the top right corner is cut at
+   45°, the other three are rounded like the menu's search box (--radius).
+   --pill-bg is the fill. */
+:root { --bevel: 6px; }
+.suggestion, .landing-weather, .pill-btn, .card-similar, .landing-search, .filter-chips span, .segmented, .segmented span, .card-split, .card-actions > .card-btn, .lb-action {
+    border-radius: var(--radius) !important;
+    clip-path: polygon(0 0, calc(100% - var(--bevel)) 0, 100% var(--bevel), 100% 100%, 0 100%);
+    border: 0 !important;
+}
+.suggestion, .landing-weather, .pill-btn, .card-similar, .landing-search, .filter-chips span, .segmented, .lb-action {
+    background: var(--pill-bg, var(--panel)) !important;
+    transition: background var(--t-fast) ease, color var(--t-fast) ease;
+}
+.card-split { overflow: hidden; }
+.card-split .card-btn { border-radius: 0 !important; }
+
+/* Sizes and colours */
+.suggestion { --ph: 2.3rem; --pill-bg: var(--panel); height: var(--ph); display: inline-flex; align-items: center; padding: 0 1.05rem; text-box: trim-both ex alphabetic; }
+.suggestion:hover, .suggestion.is-previewing { --pill-bg: var(--ink); }
+.landing-weather { --ph: 2.3rem; --pill-bg: var(--panel); height: var(--ph); padding: 0 0.95rem 0 0.8rem; text-box: trim-both ex alphabetic; box-shadow: none; }
+.landing-weather:hover { --pill-bg: var(--ink); }
+.pill-btn { --ph: 2.2rem; --pill-bg: var(--ink); height: var(--ph); display: inline-flex; align-items: center; justify-content: center; padding: 0 1rem; text-box: trim-both ex alphabetic; }
+.card-btn { text-box: trim-both ex alphabetic; }
+.card-similar { --ph: 1.45rem; --pill-bg: #fff; height: var(--ph); display: inline-flex; align-items: center; padding: 0 0.6rem; text-box: trim-both ex alphabetic; }
+.card-similar-label { white-space: pre; }   /* keeps the space after the number, which flex would drop */
+.landing-search { --pill-bg: #fff; }
+.filter-chips span { --ph: 1.75rem; --pill-bg: #F0F0F0; height: var(--ph); display: inline-flex; align-items: center; text-box: trim-both ex alphabetic; }
+.filter-chips label:hover input:not(:checked) + span { --pill-bg: #E4E4E4; }
+.filter-chips input:checked + span { --pill-bg: var(--ink); }
+/* Settings: the segmented switches (grey block, choice filled). */
+.segmented { --pill-bg: var(--bg); }
+.segmented span { --ph: 1.7rem; height: var(--ph); display: flex; align-items: center; justify-content: center; padding: 0 0.4rem; text-box: trim-both ex alphabetic; }
+/* Full-page image actions: words on a computer, bevelled buttons on a phone. */
+@media (min-width: 861px) {
+    .lb-action { clip-path: none; background: none !important; }
+}
+
+/* The landing for a visitor who has collected nothing: no menu, the field
+   takes the whole window; the menu slides in with the first search. */
+@media (max-width: 860px) {
+    body.no-menu .sidebar { display: none; }
+    body.no-menu .main { padding-top: var(--gap); padding-left: 8px; }
+    body.no-menu .landing { height: calc(100dvh - 2 * var(--gap)); }
+}
+
+/* Notes on hover (Tip in app.js) */
+.tip {
+    position: fixed; left: 0; top: 0; z-index: 1000;
+    max-width: 18rem; padding: 0.42rem 0.65rem 0.5rem;
+    background: rgba(0, 0, 0, 0.86); color: #fff;
+    font-size: 0.8rem; font-style: italic; line-height: 1.25;
+    pointer-events: none; overflow: hidden;
+    opacity: 0; translate: 0 3px;
+    transition: opacity var(--t-fast) ease, translate var(--t-mid) var(--ease-out);
+}
+.tip.is-on { opacity: 1; translate: 0 0; }
+.tip-band { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; }
+
+/* Settings › Help notes › Hidden: contextual instructions disappear (the
+   switch's own note goes too, the switch keeps its label). */
+html.hints-off .settings-help, html.hints-off .sb-drag-hint, html.hints-off .collection-empty { display: none !important; }
+
+/* Settings › Animations › Reduced: the whole site stops moving. */
+html.motion-off { scroll-behavior: auto; }
+html.motion-off *, html.motion-off *::before, html.motion-off *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+}
+html.motion-off body.is-fetching .fetch-filet { animation: none; transform: none; opacity: 0.6; }
 
 /* ── Keyframes ───────────────────────────────────────────────────────────── */
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -1200,7 +1399,6 @@ body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hi
 @keyframes dialogIn { from { opacity: 0; transform: translateY(14px) scale(0.97); } to { opacity: 1; transform: none; } }
 @keyframes dialogOut { to { opacity: 0; transform: translateY(8px) scale(0.98); } }
 @keyframes pop { 0% { transform: scale(1); } 35% { transform: scale(0.86); } 70% { transform: scale(1.1); } 100% { transform: scale(1); } }
-@keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.035); } 100% { transform: scale(1); } }
 @keyframes countBump { 0% { transform: translateY(0); } 40% { transform: translateY(-4px); } 100% { transform: none; } }
 @keyframes shimmer { to { background-position: -150% 0; } }
 @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
@@ -1215,7 +1413,7 @@ body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hi
     .card-top, .card-title, .card-author, .card-chevron { display: none; }
     .card-actions { justify-content: flex-end; }
     .card-actions > :not(.card-split) { display: none; }
-    .card-collect {
+    .card-split .card-collect {
         pointer-events: auto;
         width: 30px;
         height: 30px;
@@ -1224,8 +1422,10 @@ body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hi
         border-radius: 50% !important;
         background: rgba(255, 255, 255, 0.9);
     }
+    .card-split { clip-path: none; overflow: visible; }   /* COLLECT stays a round button */
+    .card-split .card-collect.on { background: var(--ink); color: #fff; }   /* collected: white mark on black, as uncollected is black on white */
     .card-btn .card-btn-label { display: none; }
-    .card-similar, .sb-drag-hint { display: none; }   /* similar images appear once the image is opened */
+    .card-similar { display: none; }   /* similar images appear once the image is opened */
     .card:hover .card-img img { transform: none; }
 }
 
@@ -1297,7 +1497,9 @@ body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hi
         background: var(--panel);
         border-radius: 999px;
     }
-    .lb-action.on { background: var(--ink); color: #fff; }
+    /* Bevelled buttons, as on the desktop (see Bevelled buttons). */
+    .lb-action { --ph: 2.6rem; --pill-bg: var(--panel); height: var(--ph); line-height: var(--ph); padding-block: 0; }
+    .lb-action.on { --pill-bg: var(--ink); color: #fff; }
     #lb-cover { order: 1; grid-column: 1 / -1; }
     .lb-similar { padding: 0.6rem 3.5rem 0.6rem 0.8rem; }
     .lb-close { top: 0.6rem; right: 0.6rem; }
@@ -1306,3 +1508,175 @@ body.is-landing .main { padding-bottom: var(--gap); height: 100dvh; overflow: hi
 }
 
 @keyframes slideDown { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
+
+
+/* Collections on a phone or a tablet: tapping a row opens it; the round
+   switch at its right only chooses where new images go. */
+.collection-row { position: relative; }
+.collection-pick { display: none; }
+@media (hover: none), (max-width: 860px) {
+    .collection-item { padding-right: 3rem; }
+    .collection-row.is-target .collection-item { padding-right: 3rem; }
+    .collection-pick {
+        display: grid; place-items: center;
+        position: absolute; right: -0.35rem; top: 50%; translate: 0 -50%;
+        width: 44px; height: 44px; border-radius: 50%;
+        color: var(--ink);
+    }
+    .collection-pick::before {
+        content: ''; width: 20px; height: 20px; border-radius: 50%;
+        border: 1.5px solid currentColor; opacity: 0.5; box-sizing: border-box;
+        transition: background var(--t-fast) ease, opacity var(--t-fast) ease;
+    }
+    .collection-row.is-target .collection-pick { color: #fff; }
+    .collection-row.is-target .collection-pick::before { opacity: 1; background: #fff; box-shadow: inset 0 0 0 4px rgba(0, 0, 0, 0.8); }
+}
+
+/* Landing on a phone: the first shelves are left empty (app.js sets
+   --shelf): for a first visit, the wordmark across the whole width and the
+   text under it (two shelves), with the search bar just below; once the top
+   bar is there (it has the logo and the search), the text alone (one shelf).
+   Weather at the bottom left. */
+@media (max-width: 860px) {
+    .landing-head {
+        position: static;
+        height: calc(var(--shelf, 0px) - clamp(1rem, 2.4vw, 2rem) - 8px);
+        flex-direction: column; justify-content: center; gap: 0.9rem;
+    }
+    .landing .wordmark { width: 100%; font-size: calc((100vw - 3.4rem) / 2.8); }
+    .landing-tagline { font-size: 1.02rem; }
+    .landing-weather { position: absolute; z-index: 3; left: clamp(1rem, 2.4vw, 2rem); bottom: clamp(1rem, 2.4vw, 2rem); }
+    .landing-foot { top: calc(var(--shelf, 0px) + 1rem); transform: translateX(-50%); }   /* high: the prompts unfold below */
+    body:not(.no-menu) .landing-search { display: none; }
+    body:not(.no-menu) .landing .wordmark { display: none; }   /* the top bar's logo is enough */
+    #landing-prompts { max-height: 45dvh; overflow-y: auto; }
+
+    /* Full-page image: the chooser arrow in the middle of its button. */
+    .lb-split .lb-chevron { display: flex; align-items: center; justify-content: center; line-height: 1; padding-block: 4px 0; }   /* the glyph sits high in its em */
+}
+
+/* Landing on a computer: the first shelf is left empty (app.js sets --shelf,
+   its height): the title on its left, the text on its right, in ink on the
+   page. Weather at the bottom right; the search bar a third of the way down
+   the shelves, with room for its prompts below. No element twice: menu open,
+   the landing keeps its title and the menu its search bar (the menu's logo
+   and the landing's bar go); menu folded, the star at the top left stands
+   for the title's, which goes. */
+@media (min-width: 861px) {
+    .landing-head {
+        position: static;   /* Weather is placed on the landing, not in the header */
+        height: calc(var(--shelf, 0px) - clamp(1rem, 2.4vw, 2rem) - 8px);
+        align-items: center; gap: 3rem;
+    }
+    .landing .wordmark { font-size: min(clamp(3.4rem, min(8.4vw, 15vh), 8.6rem), calc(var(--shelf, 0px) * 0.6)); }
+    .landing-tagline { max-width: 34rem; }
+    .landing-weather { position: absolute; z-index: 3; right: clamp(1rem, 2.4vw, 2rem); bottom: clamp(1rem, 2.4vw, 2rem); }
+    .landing-foot { top: calc(var(--shelf, 0px) + (100% - var(--shelf, 0px)) * 0.3); }
+    body:not(.menu-folded) .landing-search { display: none; }
+    body.menu-folded .landing .wordmark .wm-star { visibility: hidden; }
+    body:not(.menu-folded) .landing .wordmark { visibility: hidden; }   /* menu open: the logo is the menu's */
+}
+
+/* ── Menu folded behind the logo's star (computer; app.js, MenuFold) ────────
+   Open, the star stands right after "Glane" (--open-x/y, measured), as the
+   logo's own. Folded, the menu slides out to the left, the images take the
+   whole width and the star waits alone at the top left, over a band kept free
+   for it. The phone keeps its top bar and its menu button. */
+@media (min-width: 861px) {
+    .brand .wm-star { display: none; }   /* the star is the button below */
+    .brand:hover { letter-spacing: 0.02em; }   /* the star does not follow a widening logo */
+    .menu-star {
+        position: fixed; z-index: 130; left: 0; top: 0;
+        padding: 12px; margin: -12px;   /* a target larger than the small star */
+        font-family: var(--font-title); font-size: 1.9rem; line-height: 1;
+        color: var(--ink);
+        translate: var(--open-x, 6.2rem) var(--open-y, 1.1rem);
+        transition: translate var(--t-slow) var(--ease-out);
+    }
+    .menu-star .wm-star { display: block; font-size: 0.5em; margin-left: 0.06em; }
+    .menu-star:hover .wm-star { scale: 1.25; }
+    .menu-star .wm-star { transition: scale var(--t-mid) var(--ease-spring); }
+    body.menu-folded .menu-star { translate: 1.25rem var(--open-y, 1.1rem); }
+    body.menu-folded .menu-star .wm-star { scale: 1.5; }   /* alone, a little larger to be found */
+    body.menu-folded .menu-star:hover .wm-star { scale: 1.8; }
+
+    .sidebar { transition: translate var(--t-slow) var(--ease-out); }
+    body.menu-folded .sidebar {
+        translate: calc(-100% - 1px) 0;
+        visibility: hidden;   /* out of reach of the keyboard once away */
+        transition: translate var(--t-slow) var(--ease-out), visibility 0s linear var(--t-slow);
+    }
+    .main { transition: opacity var(--t-mid) ease, margin-left var(--t-slow) var(--ease-out), padding-top var(--t-slow) var(--ease-out); }
+    body.menu-folded .main { margin-left: 0; }
+    body.menu-folded:not(.is-landing) .main { padding-top: calc(var(--gap) + 2.6rem); }
+    .fetch-filet { transition: opacity var(--t-mid) ease, left var(--t-slow) var(--ease-out); }
+    body.menu-folded .fetch-filet { left: 0; }
+}
+@media (max-width: 860px) {
+    .menu-star { display: none; }
+}
+
+/* ── Landing prompts: a list under the search bar ──────────────────────────
+   Folded until the bar is clicked (app.js, Landing.dropdown); it lies over
+   the shelves and does not move the bar. One prompt per line, as plain text;
+   hovering one shows its works in the shelves. */
+#landing-prompts {
+    display: none;
+    position: absolute; top: calc(100% + 6px); left: 50%; translate: -50% 0;
+    width: min(36rem, 100%);
+    flex-direction: column; gap: 0;
+    padding: 0.35rem 0;
+    background: #fff;
+    border-radius: var(--radius);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+    text-align: left;
+}
+.landing-foot.prompts-open #landing-prompts { display: flex; animation: listIn var(--t-mid) var(--ease-out) both; }
+@keyframes listIn { from { opacity: 0; translate: -50% -6px; } to { opacity: 1; translate: -50% 0; } }
+#landing-prompts .suggestion {
+    --pill-bg: transparent;
+    clip-path: none;
+    display: flex; width: 100%; height: auto;
+    padding: 0.6rem 1.15rem;
+    justify-content: flex-start;
+    color: var(--ink);
+    transform: none;
+}
+#landing-prompts .suggestion[hidden] { display: none; }
+#landing-prompts .suggestion:hover, #landing-prompts .suggestion:focus-visible, #landing-prompts .suggestion.is-previewing { --pill-bg: var(--bg); color: var(--ink); outline: none; }
+
+/* Filters, a part of Settings: a smaller heading under a hairline. */
+.sb-subsection { margin-top: 1.1rem; padding-top: 0.9rem; border-top: 1px solid var(--line); }
+.sb-subsection .sb-heading > span:first-child { font-size: 1.05rem; }
+
+/* Naming a new collection (app.js, askCollectionName). */
+.dialog-input {
+    display: block; width: 100%; margin-top: 0.9rem;
+    padding: 0.55rem 0.7rem;
+    border: 0; border-radius: var(--radius); outline: none;
+    background: var(--bg);
+    font-size: 1.05rem; font-style: italic;   /* as collection names */
+}
+.dialog-input:focus { background: #D8D8D8; }
+
+/* Phone: "In collections" is a sheet in the middle of the screen over a
+   dimmed page; its heading stays while the list scrolls under it. */
+@media (max-width: 860px) {
+    .picker {
+        left: 50% !important; top: 50% !important; translate: -50% -50%;
+        width: min(360px, calc(100vw - 2rem));
+        max-height: min(70dvh, 560px);
+        padding: 0 0.5rem 0.5rem;
+        transform-origin: center;
+        box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.35), 0 18px 50px rgba(0, 0, 0, 0.25);
+    }
+    .picker-label {
+        position: sticky; top: 0; z-index: 2;
+        margin: 0 -0.5rem; padding: 0.9rem 0.95rem 0.6rem;
+        background: var(--panel);
+        border-bottom: 1px solid var(--line);
+        font-size: 1rem;
+    }
+    .picker-item { padding: 0.55rem 0.45rem; }
+    .picker-cover { width: 40px; height: 40px; }
+}

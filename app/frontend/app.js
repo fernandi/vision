@@ -20,6 +20,7 @@ const ICON = {
     collected: '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>',
     visual: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="12" height="12" rx="1"/><circle cx="16.5" cy="16.5" r="3.6"/><line x1="19.2" y1="19.2" x2="22" y2="22"/></svg>',
     cover: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>',
+    remove: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>',
     hide: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>',
 };
 
@@ -134,7 +135,12 @@ const Collections = {
         if (c) { c.updatedAt = Math.max(Date.now(), (c.updatedAt || 0) + 1); Sync.markDirty(id); }
         this.save();
     },
-    all() { return this.data.list; },
+    // Most recently used first: the last created, or the last one an image went
+    // into (collections from an account, which carry no usedAt: their last change).
+    all() {
+        const used = c => c.usedAt || c.updatedAt || c.createdAt;
+        return [...this.data.list].sort((a, b) => used(b) - used(a));
+    },
     get(id) { return this.data.list.find(c => c.id === id); },
     active() { return this.get(this.data.activeId) || null; },
     setActive(id) { this.data.activeId = id; this.save(); },
@@ -142,8 +148,10 @@ const Collections = {
         if (!this.active()) this.setActive(this.create().id);
         return this.active();
     },
+    // The cover is the image chosen by the user, otherwise the first one ever
+    // put in (items are kept newest first, so the last of the list).
     cover(c) {
-        return (c.coverKey && c.items.find(i => itemKey(i) === c.coverKey)) || c.items[0] || null;
+        return (c.coverKey && c.items.find(i => itemKey(i) === c.coverKey)) || c.items.at(-1) || null;
     },
     setCover(id, item) { this.get(id).coverKey = itemKey(item); this.touch(id); },
     contains(id, item) {
@@ -154,6 +162,7 @@ const Collections = {
     add(id, item) {
         if (this.contains(id, item)) return false;
         this.get(id).items.unshift({ ...item });
+        this.get(id).usedAt = Date.now();
         this.touch(id);
         return true;
     },
@@ -173,7 +182,7 @@ const Collections = {
     },
     create(name) {
         const now = Date.now();
-        const c = { id: uid(), name: name || t('collections.defaultName', { n: this.data.list.length + 1 }), items: [], createdAt: now, updatedAt: now, coverKey: null };
+        const c = { id: uid(), name: name || t('collections.defaultName', { n: this.data.list.length + 1 }), items: [], createdAt: now, updatedAt: now, usedAt: now, coverKey: null };
         this.data.list.push(c);
         this.touch(c.id);
         return c;
@@ -249,12 +258,31 @@ function makeGrid(container) {
             this.build();
         },
         build() {
+            const before = new Map(this.entries.map(e => [e.node, e.node.getBoundingClientRect()]));
             this.n = this.columnCount();
             this.container.replaceChildren();
             this.cols = [];
             this.heights = new Array(this.n).fill(0);
             for (let i = 0; i < this.n; i++) this.cols.push(this.container.appendChild(el('div', 'masonry-col')));
-            for (const e of this.entries) this.place(e);
+            // Cards already on screen change column without playing their entrance again.
+            for (const e of this.entries) { e.node.classList.add('is-settled'); this.place(e); }
+            this.glide(before);
+        },
+        // After a new column count, the cards in view slide from where they
+        // were to their new place (their width changes at once: an image is
+        // never stretched).
+        glide(before) {
+            const seen = r => r.width && r.bottom > 0 && r.top < innerHeight;
+            for (const e of this.entries) {
+                const a = before.get(e.node);
+                if (!a) continue;
+                const b = e.node.getBoundingClientRect();
+                if (!seen(a) && !seen(b)) continue;
+                const dx = a.left - b.left, dy = a.top - b.top;
+                if (Math.abs(dx) + Math.abs(dy) < 1) continue;
+                e.node.animate([{ translate: `${dx}px ${dy}px` }, { translate: '0 0' }],
+                    { duration: 560, easing: 'cubic-bezier(0.2, 0, 0, 1)' });
+            }
         },
         skeleton(count) {
             this.reset();
@@ -360,6 +388,7 @@ function createCard(item, ratio, grid, mode, batchIndex = 0) {
     const frame = el('button', 'card-img');
     frame.type = 'button';
     frame.style.aspectRatio = `1 / ${ratio}`;
+    card.style.aspectRatio = `1 / ${ratio}`;   // the card is a size container (style.css): it needs its own height
     frame.setAttribute('aria-label', t('card.open', { title: item.title }));
     const img = new Image();
     img.src = item.src;
@@ -379,6 +408,7 @@ function createCard(item, ratio, grid, mode, batchIndex = 0) {
     frame.appendChild(img);
     frame.addEventListener('click', () => openLightbox(grid, item));
     card.appendChild(frame);
+    Filets.card(card, frame, img, item);
 
     if (item.members) {
         const badge = el('span', 'card-similar', `+${item.members.length - 1}`);
@@ -402,7 +432,14 @@ function createCard(item, ratio, grid, mode, batchIndex = 0) {
         coverBtn.type = 'button';
         coverBtn.innerHTML = ICON.cover;
         coverBtn.addEventListener('click', e => { e.stopPropagation(); setCover(item); });
-        top.appendChild(coverBtn);
+        // Out of the collection in one click; the message offers to undo it.
+        const removeBtn = el('button', 'card-icon-btn card-remove');
+        removeBtn.type = 'button';
+        removeBtn.innerHTML = ICON.remove;
+        removeBtn.title = t('card.remove');
+        removeBtn.setAttribute('aria-label', removeBtn.title);
+        removeBtn.addEventListener('click', e => { e.stopPropagation(); removeItem(item, viewingId); });
+        top.append(coverBtn, removeBtn);
     }
 
     const bottom = el('div', 'card-bottom');
@@ -475,15 +512,29 @@ function setCover(item) {
     if (!c || !Collections.contains(c.id, item)) return;
     Collections.setCover(c.id, item);
     repaintAll();
-    bumpRow(c.id);
     toast(t('toast.cover', { name: c.name }));
 }
 
+// Phone: the collection images go into is chosen at the first COLLECT of each
+// visit: there the menu, which shows it, is folded away, and the last one used
+// may date from a visit long ago. A reload keeps the choice, a new tab asks.
+const COLLECT_CHOSEN = 'glane.collectChosen';
+function askWhereToCollect() {
+    if (!window.matchMedia('(max-width: 860px)').matches || !Collections.all().length) return false;
+    try { return !sessionStorage.getItem(COLLECT_CHOSEN); } catch { return false; }
+}
+function collectChosen() {
+    try { sessionStorage.setItem(COLLECT_CHOSEN, '1'); } catch { /* private mode */ }
+}
+
 function onCollectClick(card) {
+    const ask = card._mode !== 'collection' && askWhereToCollect();   // before a first collection is made
     const cid = cardCollectionId(card) ?? Collections.ensureTarget().id;
     const item = card._item;
     // Already collected: the checklist of collections, to take it out of one or add it to another.
     if (Collections.contains(cid, item)) { openPicker(card.querySelector('.card-collect'), item, card.querySelector('.card-img img')); return; }
+    if (ask) { openPicker(card.querySelector('.card-collect'), item, card.querySelector('.card-img img')); return; }
+    collectChosen();
     collectInto(cid, item, card.querySelector('.card-img img'));
     const btn = card.querySelector('.card-collect');
     btn.classList.remove('pop');
@@ -499,7 +550,7 @@ function collectInto(cid, item, fromImg) {
         run: () => { Collections.removeItem(cid, item); afterRemoval(item, cid); repaintAll(); },
     });
     repaintAll();
-    flyToCollection(cid, fromImg);
+    flyToCollection(cid, fromImg, item);
     if (view === 'collection' && viewingId === cid) {
         const recoCard = recosGrid.cardFor(item);
         if (recoCard) recosGrid.remove(recoCard);
@@ -510,16 +561,16 @@ function collectInto(cid, item, fromImg) {
     }
 }
 
-function rowFor(cid) {
-    return document.querySelector(`.collection-row[data-id="${CSS.escape(cid)}"]`);
+// Visible and not covered by anything (e.g. a folded menu).
+function isOnScreen(node) {
+    const r = node.getBoundingClientRect();
+    if (!r.width || !r.height || r.bottom < 0 || r.top > window.innerHeight) return false;
+    const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return Boolean(top) && (node.contains(top) || top.contains(node));
 }
 
-function bumpRow(cid) {
-    const row = rowFor(cid);
-    if (!row) return;
-    row.classList.remove('bump');
-    void row.offsetWidth;
-    row.classList.add('bump');
+function rowFor(cid) {
+    return document.querySelector(`.collection-row[data-id="${CSS.escape(cid)}"]`);
 }
 
 // Keeps the grid of the collection being viewed in sync after a removal.
@@ -527,34 +578,42 @@ function afterRemoval(item, cid) {
     if (view === 'collection' && viewingId === cid) {
         const card = mainGrid.cardFor(item);
         if (card) mainGrid.remove(card);
-        if (!Collections.get(cid).items.length) setStatus(statusEl, t('status.collectionEmpty'));
     }
 }
 
-function flyToCollection(cid, fromImg) {
-    const dest = rowFor(cid)?.querySelector('.collection-cover');
-    const bumpTarget = () => bumpRow(cid);
-    const b = dest?.getBoundingClientRect();
-    if (!b || !fromImg || b.height === 0 || b.bottom < 0 || b.top > window.innerHeight) {
-        bumpTarget();
-        return;
-    }
-    const a = fromImg.getBoundingClientRect();
-    const ghost = fromImg.cloneNode();
-    ghost.className = 'fly-ghost';
-    Object.assign(ghost.style, { left: `${a.left}px`, top: `${a.top}px`, width: `${a.width}px`, height: `${a.height}px` });
-    document.body.appendChild(ghost);
-    const dx = b.left + b.width / 2 - (a.left + a.width / 2);
-    const dy = b.top + b.height / 2 - (a.top + a.height / 2);
-    const s = Math.max(b.width / a.width, 0.08);
-    ghost.animate([
-        { transform: 'translate(0, 0) scale(1)', opacity: 1 },
-        { transform: `translate(${dx * 0.55}px, ${dy * 0.35 - 40}px) scale(${(1 + s) / 2})`, opacity: 0.95, offset: 0.55 },
-        { transform: `translate(${dx}px, ${dy}px) scale(${s})`, opacity: 0.25 },
-    ], { duration: 720, easing: 'cubic-bezier(0.55, 0, 0.25, 1)' }).onfinish = () => {
-        ghost.remove();
-        bumpTarget();
-    };
+// The image folds into a filet of its own pixels and slides into the spine of
+// its collection, which stays hidden until it arrives (filets.js).
+// A collection's band: one row of pixels from each of its latest images, side
+// by side, oldest on the left, so it grows to the right as images come in.
+const BAND_ITEMS = 16;
+function paintCollectionBand(band, c) {
+    band.replaceChildren(...c.items.slice(0, BAND_ITEMS).reverse().map(it => {
+        const seg = el('i');
+        seg.dataset.key = itemKey(it);
+        Filets.paint(seg, Filets.fromItem(it), 'row');
+        return seg;
+    }));
+}
+
+// Collecting: the image's line of pixels rises over the thumbnail, then slides
+// into its new segment of the collection's band. When the menu is folded away
+// (phone: its button; computer: the star), it slides into what stands for it.
+function flyToCollection(cid, fromImg, item) {
+    const seg = rowFor(cid)?.querySelector(`.collection-band > i[data-key="${CSS.escape(itemKey(item))}"]`);
+    seg?.classList.add('is-waiting');
+    // The first collection unfolds the menu: the band leaves once it is in place.
+    setTimeout(() => {
+        let dest = seg && isOnScreen(seg.closest('.collection-item')) ? seg : null;
+        const stand = [$('menu-btn'), MenuFold.star].find(b => isOnScreen(b));
+        if (!dest && stand) {
+            const m = stand.getBoundingClientRect();
+            dest = new DOMRect(m.left + 8, m.top + m.height / 2 - 3, Math.max(6, m.width - 16), 6);
+        }
+        Filets.fold(fromImg, item, dest, () => {
+            seg?.classList.remove('is-waiting');
+            Filets.reveal(seg);
+        });
+    }, Math.max(0, MenuFold.settled - Date.now()));
 }
 
 function showHideOverlay(card, grid) {
@@ -614,15 +673,17 @@ function openPicker(anchor, item, fromImg) {
         const btn = el('button', 'picker-item');
         btn.type = 'button';
         btn.style.setProperty('--i', i);
+        const band = el('span', 'collection-band');
         const cover = el('span', 'picker-cover');
         const meta = el('span', 'picker-meta');
         const text = el('span', 'picker-text');
         text.append(el('span', 'picker-name', c.name), meta);
-        btn.append(cover, text);
+        btn.append(cover, text, band);
         const paint = () => {
             btn.classList.toggle('is-target', c.id === Collections.data.activeId);
             const first = Collections.cover(c);
             cover.style.backgroundImage = first ? cssUrl(first.src) : '';
+            paintCollectionBand(band, c);
             meta.textContent = countLabel(c.items.length);
             if (item) {
                 const on = Collections.contains(c.id, item);
@@ -646,6 +707,7 @@ function openPicker(anchor, item, fromImg) {
                     if (view === 'collection' && viewingId === c.id && !document.body.contains(anchor)) { closePicker(); return; }
                 } else {
                     setTarget(c.id, false);
+                    collectChosen();
                     collectInto(c.id, item, fromImg);
                 }
                 rows.forEach(p => p());
@@ -664,10 +726,14 @@ function openPicker(anchor, item, fromImg) {
     const text = el('span', 'picker-text');
     text.append(el('span', 'picker-name', t('picker.new')));
     create.append(plus, text);
-    create.addEventListener('click', () => {
+    // A new collection is named before anything goes into it.
+    create.addEventListener('click', async () => {
         closePicker();
-        const c = Collections.create();
+        const name = await askCollectionName();
+        if (name == null) return;
+        const c = Collections.create(name);
         setTarget(c.id, false);
+        collectChosen();
         if (item) collectInto(c.id, item, fromImg);
         else toast(t('toast.target', { name: c.name }));
     });
@@ -748,6 +814,31 @@ function restoreInView(item, cid) {
         setStatus(statusEl, '');
         fillGrid(mainGrid, [item], renderGen, 'collection');
     }
+}
+
+// The name of a new collection (the default one already filled in); null if cancelled.
+function askCollectionName() {
+    return new Promise(resolve => {
+        let answered = false;
+        const answer = v => { if (!answered) { answered = true; resolve(v); } };
+        openDialog(d => {
+            const fallback = t('collections.defaultName', { n: Collections.all().length + 1 });
+            const form = el('form', 'dialog-form');
+            const input = el('input', 'dialog-input');
+            input.type = 'text';
+            input.value = fallback;
+            input.setAttribute('aria-label', t('picker.newName'));
+            const create = el('button', 'pill-btn', t('picker.create'));
+            create.type = 'submit';
+            const foot = el('div', 'dialog-foot');
+            foot.append(dialogButton(t('dialog.cancel'), 'link-btn', () => { closeDialog(); answer(null); }), create);
+            form.append(el('div', 'dialog-title', t('picker.newName')), input, foot);
+            form.addEventListener('submit', e => { e.preventDefault(); closeDialog(); answer(input.value.trim() || fallback); });
+            d.appendChild(form);
+            requestAnimationFrame(() => { input.focus(); input.select(); });
+        });
+        dialog.addEventListener('close', () => answer(null), { once: true });
+    });
 }
 
 function confirmDialog({ title, text, confirm, danger = false }) {
@@ -940,6 +1031,18 @@ function showView(name) {
     recosGrid.reset();
     setStatus(statusEl, '');
     $('empty-state').hidden = name !== 'empty';
+    // A visitor who has collected nothing sees the landing alone, without the
+    // menu; it comes in with the first search or prompt.
+    document.body.classList.toggle('no-menu', name === 'empty' && !Collections.all().some(c => c.items.length));
+    if (name === 'empty') {
+        Filets.setAmbient(null);
+        // Back on the landing: its lines were measured while it was hidden.
+        requestAnimationFrame(() => alignWordmarkStar());
+        if (typeof Landing !== 'undefined' && Landing.sets.length) requestAnimationFrame(() => {
+            if (Landing.layout()) Landing.show(Landing.current, false);
+            Landing.wake();
+        });
+    }
     document.body.classList.toggle('is-landing', name === 'empty');
     $('view-header').hidden = name !== 'collection';
     $('shared-header').hidden = name !== 'shared';
@@ -976,13 +1079,16 @@ async function loadPage(gen) {
     if (!results.hasMore || results.loadingGen === gen) return;
     results.loadingGen = gen;
     if (results.offset > 0) setStatus(statusEl, t('status.loading'), true);
+    const firstPage = results.offset === 0;
+    Filets.loading(true);
     try {
         const data = await postJSON('/search', { ...results.request, offset: results.offset });
         if (gen !== renderGen) return;
         results.offset += data.results.length;
         results.hasMore = Boolean(data.has_more);
-        const list = data.results.map(toItem).filter(it => !hiddenIds.has(it.id));
+        const list = data.results.map(toItem).filter(it => !hiddenIds.has(it.id) && !(view === 'weather' && weatherExcluded(it.title)));
         await fillGrid(mainGrid, list, gen, 'results', it => results.items.push(it));
+        if (firstPage && gen === renderGen) Filets.setAmbient(list[0]);   // the interface takes the colours of the search
         if (gen !== renderGen) return;
         const filtered = results.request.periods || results.request.techniques;
         setStatus(statusEl, mainGrid.items.length ? (results.hasMore ? '' : t('status.end'))
@@ -996,9 +1102,15 @@ async function loadPage(gen) {
         results.hasMore = false;
     } finally {
         if (results.loadingGen === gen) results.loadingGen = null;
+        Filets.loading(false);
     }
     if (gen === renderGen) maybeLoadMore();
 }
+
+// Works that never illustrate the weather (treatise plates came up for rain),
+// by the start of their title: every plate of a series goes at once.
+const WEATHER_EXCLUDED = ['A Treatise on Landscape Painting and Effect'];
+const weatherExcluded = title => WEATHER_EXCLUDED.some(start => title.startsWith(start));
 
 function maybeLoadMore() {
     if ((view !== 'results' && view !== 'weather') || !results.hasMore || results.loadingGen === renderGen) return;
@@ -1127,7 +1239,7 @@ function acceptsItemDrop(node, onDrop) {
 
 function dropIntoCollection(cid, item) {
     const c = Collections.get(cid);
-    if (Collections.contains(cid, item)) { toast(t('toast.already', { name: c.name })); bumpRow(cid); return; }
+    if (Collections.contains(cid, item)) { toast(t('toast.already', { name: c.name })); return; }
     collectInto(cid, item, null);
 }
 
@@ -1143,9 +1255,13 @@ function buildCollectionRow(c) {
         el('span', 'collection-title'),
         el('span', 'collection-meta'),
     );
-    btn.append(cover, text);
+    btn.append(cover, text, el('span', 'collection-band'));
     btn.addEventListener('click', () => openCollection(c.id));
-    li.appendChild(btn);
+    // Phone: tapping a row opens it; this button only chooses where images go.
+    const pick = el('button', 'collection-pick');
+    pick.type = 'button';
+    pick.addEventListener('click', () => setTarget(c.id, true));
+    li.append(btn, pick);
     acceptsItemDrop(li, item => dropIntoCollection(c.id, item));
     return li;
 }
@@ -1153,7 +1269,6 @@ function buildCollectionRow(c) {
 function renderSidebarCollections() {
     const list = $('collection-list');
     const existing = new Map([...list.querySelectorAll('.collection-row')].map(li => [li.dataset.id, li]));
-    list.querySelector('.collection-empty')?.remove();
 
     Collections.all().forEach((c, i) => {
         let li = existing.get(c.id);
@@ -1167,14 +1282,16 @@ function renderSidebarCollections() {
         li.querySelector('.collection-title').textContent = c.name;
         li.querySelector('.collection-meta').textContent = countLabel(c.items.length);
         li.querySelector('.collection-item').title = isTarget ? t('collections.open', { name: c.name }) : t('collections.openAndTarget', { name: c.name });
+        const pick = li.querySelector('.collection-pick');
+        pick.setAttribute('aria-pressed', String(isTarget));
+        pick.setAttribute('aria-label', t('collections.select', { name: c.name }));
         const cover = Collections.cover(c);
         li.querySelector('.collection-cover').style.backgroundImage = cover ? cssUrl(cover.src) : '';
+        paintCollectionBand(li.querySelector('.collection-band'), c);
     });
     existing.forEach(li => li.remove());
 
-    if (!Collections.all().length) {
-        list.appendChild(el('li', 'collection-empty', t('collections.empty')));
-    }
+    MenuFold.auto();
 }
 
 acceptsItemDrop($('new-collection-btn'), item => {
@@ -1192,13 +1309,14 @@ function openCollection(id, record = true) {
     viewingId = id;
     if (record) Nav.push({ view: 'collection', id });   // before showView resets the scroll
     showView('collection');
+    Filets.setAmbient(Collections.cover(c));
     $('collection-name').value = c.name;
     $('collection-count').textContent = countLabel(c.items.length);
     $('back-btn').hidden = !results.request;
     $('collection-search-btn').disabled = !c.items.some(i => i.id != null);
     const gen = renderGen;
     if (!c.items.length) {
-        setStatus(statusEl, t('status.collectionEmpty'));
+        setStatus(statusEl, '');   // the menu's note says how to fill it
     } else {
         mainGrid.skeleton(Math.min(c.items.length, 8));
         fillGrid(mainGrid, c.items, gen, 'collection').then(done => {
@@ -1284,7 +1402,7 @@ $('collection-zip-btn').addEventListener('click', async e => {
         const url = URL.createObjectURL(await resp.blob());
         const a = el('a');
         a.href = url;
-        a.download = `${c.name.replace(/[<>:"/\\|?*]+/g, ' ').trim() || 'collection'}.zip`;
+        a.download = `Glane Collection ${c.name.replace(/[<>:"/\\|?*]+/g, ' ').trim() || 'collection'}.zip`;
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -1413,7 +1531,6 @@ $('shared-save-btn').addEventListener('click', () => {
     [...shared.items].reverse().forEach(item => Collections.add(c.id, item));
     setTarget(c.id, false);
     repaintAll();
-    bumpRow(c.id);
     toast(t('shared.saved', { name: c.name }));
 });
 
@@ -1476,6 +1593,7 @@ function paintLightboxActions() {
     const coverBtn = $('lb-cover');
     const c = view === 'collection' && lbGrid === mainGrid ? Collections.get(viewingId) : null;
     coverBtn.hidden = !c || !Collections.contains(c.id, lbItem);
+    $('lb-remove').hidden = coverBtn.hidden;
     if (!coverBtn.hidden) {
         const isCover = itemKey(Collections.cover(c) || {}) === itemKey(lbItem);
         coverBtn.classList.toggle('on', isCover);
@@ -1485,6 +1603,7 @@ function paintLightboxActions() {
 
 function showInLightbox(item, withSimilar, direction) {
     lbItem = item;
+    Filets.setAmbient(item);
     lbImg.getAnimations().forEach(a => a.cancel());
     lbImg.style.opacity = '0';
     lbImg.onload = () => {
@@ -1565,11 +1684,20 @@ $('lb-prev').addEventListener('click', () => stepLightbox(-1));
 $('lb-next').addEventListener('click', () => stepLightbox(1));
 $('lb-collect').addEventListener('click', e => {
     if (!lbItem) return;
+    const ask = askWhereToCollect();   // before a first collection is made
     const cid = Collections.ensureTarget().id;
-    if (Collections.contains(cid, lbItem)) { e.stopPropagation(); openPicker(e.currentTarget, lbItem, null); }
-    else collectInto(cid, lbItem, null);
+    if (Collections.contains(cid, lbItem) || ask) { e.stopPropagation(); openPicker(e.currentTarget, lbItem, null); return; }
+    collectChosen();
+    collectInto(cid, lbItem, null);
 });
 $('lb-cover').addEventListener('click', () => { if (lbItem) setCover(lbItem); });
+// The image leaves the collection: the full page closes on it (Undo in the message).
+$('lb-remove').addEventListener('click', () => {
+    if (!lbItem) return;
+    const item = lbItem;
+    closeLightbox();
+    removeItem(item, viewingId);
+});
 $('lb-share').addEventListener('click', () => { if (lbItem) shareLink(shareUrl('i', lbItem.id), lbItem.title, t('share.image')); });
 $('lb-collect-menu').addEventListener('click', e => { e.stopPropagation(); if (lbItem) openPicker(e.currentTarget, lbItem, null); });
 $('lb-visual').addEventListener('click', () => {
@@ -1641,20 +1769,20 @@ const checkedValue = name => document.querySelector(`input[name="${name}"]:check
 
 function updateSettingsUI() {
     const variety = VARIETY_KEYS[checkedValue('variety')];
-    const mode = checkedValue('combination-mode');
     const neg = checkedValue('negative-mode');
     // Combining only means something with at least two elements (words + image, or two images).
     const elements = (searchInput.value.trim() ? 1 : 0) + query.refs.length;
     const locked = elements < 2;
     $('combine-group').classList.toggle('is-locked', locked);
     $('combine-group').querySelectorAll('input').forEach(i => { i.disabled = locked; });
-    $('combine-locked').hidden = !locked;
+    // No image in the search bar: the choices stay hidden, a note on hover says why.
+    const noImage = !query.refs.length;
+    $('combine-group').hidden = noImage;
+    $('combine-label').classList.toggle('is-unavailable', noImage);
+    if (noImage) $('combine-label').dataset.tip = t('settings.combine.locked');
+    else delete $('combine-label').dataset.tip;
     $('variety-help').textContent = t(`settings.variety.${variety}.help`);
     $('negative-help').textContent = t(`neg.${neg}.help`);
-    const parts = [t(`settings.variety.${variety}`)];
-    if (!locked) parts.push(t(`mode.${mode}`));
-    if (query.negs.length) parts.push(t(`neg.${neg}`));
-    $('settings-summary').textContent = parts.join(' · ');
 }
 
 // ── Filters ─────────────────────────────────────────────────────────────────
@@ -1708,6 +1836,19 @@ $('filters-clear').addEventListener('click', () => {
 document.querySelectorAll('input[name="variety"], input[name="combination-mode"], input[name="negative-mode"]').forEach(r =>
     r.addEventListener('change', () => { updateSettingsUI(); if (view === 'results') runSearch(); }));
 searchInput.addEventListener('input', updateSettingsUI);
+// Help notes ("Drag an image onto a collection…", the settings' explanations):
+// shown by default, hidden for the whole site once a visitor turns them off.
+const hintsOff = () => { try { return localStorage.getItem('glane.hints') === 'off'; } catch { return false; } };
+document.documentElement.classList.toggle('hints-off', hintsOff());
+document.querySelector(`input[name="hints"][value="${hintsOff() ? 'off' : 'on'}"]`).checked = true;
+document.querySelectorAll('input[name="hints"]').forEach(r => r.addEventListener('change', () => {
+    try { if (r.value === 'off') localStorage.setItem('glane.hints', 'off'); else localStorage.removeItem('glane.hints'); } catch { /* private mode */ }
+    document.documentElement.classList.toggle('hints-off', r.value === 'off');
+}));
+// Animations: on for everyone by default; "Reduced" stills the whole site (filets.js).
+document.querySelector(`input[name="motion"][value="${Filets.motion() ? 'on' : 'off'}"]`).checked = true;
+document.querySelectorAll('input[name="motion"]').forEach(r =>
+    r.addEventListener('change', () => { Filets.setMotion(r.value === 'on'); updateSettingsUI(); }));
 
 // ── Mobile menu ─────────────────────────────────────────────────────────────
 function closeMenu() {
@@ -1717,6 +1858,7 @@ function closeMenu() {
 $('menu-btn').addEventListener('click', () => {
     const open = !document.body.classList.contains('menu-open');
     document.body.classList.toggle('menu-open', open);
+    if (open) requestAnimationFrame(() => alignWordmarkStar());   // the menu's stars, now on screen
     $('menu-btn').setAttribute('aria-expanded', String(open));
 });
 
@@ -1990,31 +2132,46 @@ async function initAccount() {
     }
 }
 
-// ── Landing: animated wordmark + floating images that preview each prompt ──
-// The images come from a static file (landing.json): no search runs on arrival.
-const LANDING_SLOTS = [
-    { x: '3%', y: '7%', w: '12%', depth: 26, dur: '7.5s', rot: 1.4 },
-    { x: '16%', y: '34%', w: '10%', depth: 14, dur: '9s', rot: -1.1 },
-    { x: '4%', y: '58%', w: '13%', depth: 32, dur: '8.2s', rot: 0.9 },
-    { x: '19%', y: '80%', w: '10%', depth: 18, dur: '10s', rot: -1.6 },
-    { x: '77%', y: '6%', w: '12%', depth: 22, dur: '8.8s', rot: -1.2 },
-    { x: '89%', y: '31%', w: '9%', depth: 12, dur: '9.6s', rot: 1.3 },
-    { x: '75%', y: '55%', w: '11%', depth: 30, dur: '7.8s', rot: -0.8 },
-    { x: '87%', y: '76%', w: '11%', depth: 20, dur: '10.5s', rot: 1.1 },
-    { x: '39%', y: '86%', w: '8%', depth: 10, dur: '11s', rot: 0.7 },
-    { x: '56%', y: '3%', w: '7%', depth: 8, dur: '12s', rot: -0.9 },
-];
+// ── Landing: shelves of book spines made of stretched pixels, the text on top ─
+// The images come from a static file (landing.json): no search runs on arrival,
+// and only thumbnails are loaded. Each spine (taller than wide) shows the
+// centre column of its image stretched across it (the browser stretches the
+// thumbnail: nothing is read back). Hovering a spine makes its image spring
+// out sideways, sliding from behind the spine over its neighbours like a book
+// pulled from the shelf: the shelf's height, its true proportions, never
+// distorted.
 const LANDING_READY_TIMEOUT_MS = 6000;
+const LANDING_STRETCH = 600;     // one source column fills the spine
+const LANDING_GAP_X = 3;         // between spines
+const LANDING_GAP_Y = 8;         // between shelves
+const LANDING_ARRIVAL_MS = 3000;  // end of the arrival (style.css: the search bar, last, at 1.9 s + 0.9 s)
 
 const Landing = {
     data: null,
     sets: [],            // [default mix, prompt 1, prompt 2, …]
     current: 0,
-    cards: [],
-    grid: { items: [] }, // lightbox navigation over the floating images
+    cells: [],
+    grid: { items: [] }, // lightbox navigation over the visible images
     swapTimer: null,
+    layoutKey: '',
 
     async init() {
+        // The landing's own search bar runs the same search as the menu's.
+        $('landing-search').addEventListener('submit', e => {
+            e.preventDefault();
+            const q = $('landing-search-input').value.trim();
+            if (!q) return;
+            searchInput.value = q;
+            $('landing-search-input').value = '';
+            // The search opens the menu, where the bar now is, beside the images.
+            MenuFold.touched = true;
+            MenuFold.set(false);
+            runSearch();
+        });
+        this.dropdown();
+        // A click anywhere else (or Escape) tucks the open image back into its spine.
+        document.addEventListener('pointerdown', e => { if (!e.target.closest('.lcell.is-open')) this.closeSpines(); });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') this.closeSpines(); });
         const params = new URLSearchParams(location.search);
         if (params.has('q') || params.has('ref') || params.has('c') || params.has('meteo')) { this.finish(); return; }   // arriving on a search or a shared collection
         try {
@@ -2026,18 +2183,54 @@ const Landing = {
         }
         const prompts = this.data.prompts;
         const mix = [];
-        for (let round = 0; mix.length < LANDING_SLOTS.length && round < 10; round++) {
-            for (const p of prompts) if (p.items[round] && mix.length < LANDING_SLOTS.length) mix.push(p.items[round]);
-        }
-        this.sets = [mix, ...prompts.map(p => p.items.slice(0, LANDING_SLOTS.length))];
+        for (let round = 0; round < 10; round++) for (const p of prompts) if (p.items[round]) mix.push(p.items[round]);
+        this.sets = [mix, ...prompts.map(p => p.items)];
         this.buildPrompts(prompts);
-        this.buildCards();
-        await this.preload(this.sets[0], true);
+        document.body.classList.toggle('no-menu', view === 'empty' && !Collections.all().some(c => c.items.length));
+        window.addEventListener('resize', () => {
+            if ($('empty-state').hidden || !this.sets.length) return;
+            if (this.layout()) this.show(this.current, false);
+        });
+        this.layout();
+        await this.preload(this.sets[0].slice(0, Math.min(24, this.cells.length)), true);
         this.finish();
         this.show(0, false);
         // Warm the other sets so hovering a prompt swaps instantly.
         const rest = this.sets.slice(1).flat();
         (window.requestIdleCallback || setTimeout)(() => this.preload(rest, false));
+    },
+
+    // The prompts: a list that unfolds under the empty search bar when it is
+    // clicked, and folds as soon as something is typed; arrows walk it,
+    // Escape folds it.
+    dropdown() {
+        const foot = $('landing-search').closest('.landing-foot');
+        const input = $('landing-search-input');
+        const list = $('landing-prompts');
+        const shown = () => [...list.querySelectorAll('.suggestion:not([hidden])')];
+        let quiet = false;   // focus given back by Escape: the list stays folded
+        const open = on => {
+            on = on && shown().length > 0;
+            foot.classList.toggle('prompts-open', on);
+            input.setAttribute('aria-expanded', String(on));
+        };
+        input.addEventListener('focus', () => { if (!quiet) open(!input.value.trim()); quiet = false; });
+        input.addEventListener('input', () => open(!input.value.trim()));
+        input.addEventListener('click', () => open(!input.value.trim()));   // already focused: no focus event
+        document.addEventListener('pointerdown', e => { if (!foot.contains(e.target)) open(false); });
+        foot.addEventListener('focusout', e => { if (e.relatedTarget && !foot.contains(e.relatedTarget)) open(false); });
+        foot.addEventListener('keydown', e => {
+            if (e.key === 'Escape') { open(false); if (document.activeElement !== input) { quiet = true; input.focus(); } return; }
+            if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+            e.preventDefault();
+            open(true);
+            const all = shown();
+            const i = all.indexOf(document.activeElement);
+            const down = e.key === 'ArrowDown';
+            if (i < 0) (down ? all[0] : all.at(-1))?.focus();
+            else if (!down && i === 0) input.focus();
+            else all[(i + (down ? 1 : -1)) % all.length].focus();
+        });
     },
 
     buildPrompts(prompts) {
@@ -2046,7 +2239,7 @@ const Landing = {
             const b = el('button', 'suggestion', promptLabel(p.label));
             b.type = 'button';
             b.style.setProperty('--i', i);
-            b.addEventListener('click', () => { searchInput.value = p.label; runSearch(); });
+            b.addEventListener('click', () => { searchInput.value = sentenceCase(p.label); runSearch(); });
             if (window.matchMedia('(hover: hover)').matches) {
                 b.addEventListener('mouseenter', () => this.preview(i + 1, b));
                 b.addEventListener('focus', () => this.preview(i + 1, b));
@@ -2055,79 +2248,151 @@ const Landing = {
         });
     },
 
-    buildCards() {
-        const stage = $('landing-stage');
-        this.cards = LANDING_SLOTS.map((slot, n) => {
-            const card = el('button', 'float-card');
-            card.type = 'button';
-            for (const [k, v] of Object.entries(slot)) card.style.setProperty(`--${k}`, v);
-            card.style.setProperty('--n', n);
-            const inner = el('span', 'float-inner');
-            const img = new Image();
-            img.alt = '';
-            img.decoding = 'async';
-            img.addEventListener('error', () => {
-                if (card._item?.orig && img.src !== new URL(card._item.orig, location.href).href) img.src = card._item.orig;
-            });
-            inner.append(img, el('span', 'float-title'));
-            card.appendChild(inner);
-            card.addEventListener('click', () => { if (card._item) openLightbox(this.grid, card._item); });
-            stage.appendChild(card);
-            return card;
-        });
-        this.parallax(stage);
-    },
-
     preload(items, track) {
-        const bar = $('landing-progress-bar');
+        const bar = $('landing-progress-bar');   // gone from the page: kept optional
         let done = 0;
         const all = items.map(it => preload(it).then(() => {
             done++;
-            if (track) bar.style.setProperty('--p', done / items.length);
+            if (track && bar) bar.style.setProperty('--p', done / items.length);
         }));
         const everything = Promise.all(all);
         return track ? Promise.race([everything, new Promise(r => setTimeout(r, LANDING_READY_TIMEOUT_MS))]) : everything;
     },
 
-    // The wordmark waves at least twice, then each letter stops at the end of
-    // its current cycle, so it settles on the resting shape without a jump.
     finish() {
-        const landing = $('empty-state');
-        const letters = landing.querySelectorAll('.wm-letter');
-        letters.forEach(letter => letter.classList.add('is-waving'));
-        landing.classList.remove('is-loading');
-        requestAnimationFrame(() => letters.forEach(letter => {
-            const wave = letter.getAnimations().find(a => a.animationName === 'wmBreathe');
-            if (!wave) return;
-            const current = wave.effect.getComputedTiming().currentIteration;
-            wave.effect.updateTiming({ iterations: Math.max(2, (current ?? 0) + 1) });
-        }));
+        $('empty-state').classList.remove('is-loading');
+        setTimeout(() => $('empty-state').classList.add('has-arrived'), LANDING_ARRIVAL_MS);
+    },
+
+    // Shelves of spines filling the whole landing. Returns true when the spines
+    // had to be rebuilt (their number changed).
+    layout() {
+        const field = $('landing-field');
+        const box = field.parentElement.getBoundingClientRect();   // the landing: the field may start lower
+        if (!box.height) return false;
+        const W = box.width, H = box.height;
+        // The first shelves stay empty, for the title and the text: one on a
+        // computer; on a phone two for a first visit (the text runs under the
+        // title), one once the top bar has the logo.
+        const freeShelves = innerWidth > 860 || !document.body.classList.contains('no-menu') ? 1 : 2;
+        // The window sets how many spines there are; the menu folding or
+        // unfolding only makes them wider or narrower.
+        const win = `${innerWidth}x${innerHeight}`;
+        const sameWindow = this.cols && win === this.win;
+        this.win = win;
+        const cols = sameWindow ? this.cols : Math.max(8, Math.min(48, Math.round(W / (W < 700 ? 34 : 44))));
+        this.W = W;
+        this.cols = cols;
+        this.cw = (W - LANDING_GAP_X * (cols - 1)) / cols;
+        if (!sameWindow) this.shelves = Math.min(6, Math.round((H + LANDING_GAP_Y) / (this.cw * 5 + LANDING_GAP_Y)));
+        let rows = Math.max(freeShelves + 2, this.shelves);
+        this.ch = (H - LANDING_GAP_Y * (rows - 1)) / rows;
+        const shelf = freeShelves * (this.ch + LANDING_GAP_Y);
+        rows -= freeShelves;
+        field.style.top = shelf ? `${shelf}px` : '';
+        field.parentElement.style.setProperty('--shelf', `${shelf}px`);
+        this.shelf = shelf;
+        this.fitTitle();
+        field.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+        field.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+        field.style.gap = `${LANDING_GAP_Y}px ${LANDING_GAP_X}px`;
+        const key = `${cols}/${rows}/${shelf ? 1 : 0}`;
+        if (key === this.layoutKey) { this.cells.forEach(c => this.stretch(c)); return false; }
+        this.layoutKey = key;
+        field.replaceChildren();
+        this.cells = Array.from({ length: cols * rows }, (_, i) => {
+            const cell = el('button', 'lcell');
+            cell.type = 'button';
+            cell._col = i % cols;
+            cell.style.setProperty('--d', `${(cell._col + Math.floor(i / cols) * 3) * 25}ms`);
+            const img = new Image();
+            img.alt = '';
+            img.decoding = 'async';
+            img.className = 'lcell-photo';
+            const drawer = el('span', 'lcell-drawer');
+            drawer.appendChild(img);
+            cell.append(el('span', 'lcell-band'), drawer);
+            // A first click pulls the image out of its spine; a click on it,
+            // once out, shows it full page.
+            cell.addEventListener('click', () => {
+                if (!cell._item) return;
+                if (cell.classList.contains('is-open')) { openLightbox(this.grid, cell._item); return; }
+                this.closeSpines();
+                cell.classList.add('is-open');
+            });
+            field.appendChild(cell);
+            return cell;
+        });
+        return true;
+    },
+
+    // The spine: the image's centre column stretched across it, the image's
+    // full height on the shelf's height. The drawer: right beside the spine
+    // (on its left near the field's right edge), as wide as the image at the
+    // shelf's height; the photo waits inside it, tucked behind the spine.
+    closeSpines() { this.cells?.forEach(c => c.classList.remove('is-open')); },
+
+    // Computer: the title as tall as the text beside it (within its shelf).
+    fitTitle(shelf = this.shelf || 0) {
+        const title = document.querySelector('.landing .wordmark');
+        const text = document.querySelector('.landing-tagline');
+        title.style.fontSize = '';
+        if (innerWidth <= 860 || !shelf || !text.offsetHeight || !title.offsetHeight) return;
+        const size = parseFloat(getComputedStyle(title).fontSize);
+        const height = Math.min(text.offsetHeight, shelf * 0.8);
+        title.style.fontSize = `${(size * height / title.offsetHeight).toFixed(1)}px`;
+    },
+
+    stretch(cell) {
+        const item = cell._item;
+        const band = cell.querySelector('.lcell-band');
+        if (!item) { band.style.backgroundImage = ''; return; }
+        // In % of the spine: it follows the spine's width while the menu moves.
+        band.style.backgroundImage = cssUrl(item.src);
+        band.style.backgroundSize = `${LANDING_STRETCH * 100}% 100%`;
+        band.style.backgroundPosition = '50% 0';
+        const w = Math.min(this.ch / (item.ratio || 1.2), this.W * 0.6);
+        const left = cell._col * (this.cw + LANDING_GAP_X);
+        const toLeft = left + this.cw + w > this.W;
+        const drawer = cell.querySelector('.lcell-drawer');
+        drawer.classList.toggle('to-left', toLeft);
+        drawer.style.width = `${w.toFixed(1)}px`;
+    },
+
+    assign(cell, item) {
+        cell._item = item;
+        cell.classList.remove('is-ready');
+        if (!item) { cell.querySelector('.lcell-band').style.backgroundImage = ''; return; }
+        cell.title = item.title;
+        cell.setAttribute('aria-label', t('card.open', { title: item.title }));
+        const img = cell.querySelector('img');
+        img.onload = () => { if (cell._item === item) cell.classList.add('is-ready'); };
+        img.onerror = () => { if (item.orig && img.src !== item.orig) img.src = item.orig; };
+        img.src = item.src;
+        this.stretch(cell);
+        if (img.complete && img.naturalWidth) cell.classList.add('is-ready');
     },
 
     show(setIndex, animate) {
-        const items = this.sets[setIndex] || [];
+        const set = this.sets[setIndex] || [];
         this.current = setIndex;
+        const items = set.slice(0, this.cells.length);
+        for (const extra of this.sets[0]) if (items.length < this.cells.length && !items.includes(extra)) items.push(extra);
         this.grid.items = items.slice();
-        this.cards.forEach((card, n) => {
-            const item = items[n];
-            const apply = () => {
-                card._item = item;
-                card.hidden = !item;
-                if (!item) return;
-                const img = card.querySelector('img');
-                img.src = item.src;
-                card.style.setProperty('--ratio', item.ratio || 1.2);
-                card.querySelector('.float-title').textContent = item.title;
-                card.setAttribute('aria-label', t('card.open', { title: item.title }));
-                card.classList.remove('swap-out');
-            };
-            if (!animate) { apply(); return; }
+        for (let i = 0; items.length < this.cells.length && this.grid.items.length; i++) items.push(this.grid.items[i % this.grid.items.length]);
+        this.cells.forEach((cell, i) => {
+            if (!animate || !Filets.motion()) { this.assign(cell, items[i]); return; }
+            // A new set spreads across the field from the top left corner.
             setTimeout(() => {
-                card.classList.add('swap-out');
-                setTimeout(apply, 320);
-            }, n * 45);
+                cell.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140, easing: 'ease-in' }).onfinish = () => {
+                    this.assign(cell, items[i]);
+                    cell.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 360, easing: 'ease-out' });
+                };
+            }, parseFloat(cell.style.getPropertyValue('--d')) * 0.5);
         });
     },
+
+    wake() {},   // kept for showView(): nothing runs continuously any more
 
     preview(setIndex, button) {
         document.querySelectorAll('#landing-prompts .suggestion').forEach(b => b.classList.toggle('is-previewing', b === button));
@@ -2135,36 +2400,123 @@ const Landing = {
         clearTimeout(this.swapTimer);
         this.swapTimer = setTimeout(() => this.show(setIndex, true), 90);
     },
-
-    // Images drift toward the mouse, each at its own depth.
-    parallax(stage) {
-        if (!window.matchMedia('(hover: hover)').matches) return;
-        const target = { x: 0, y: 0 };
-        const now = { x: 0, y: 0 };
-        let running = false;
-        const tick = () => {
-            now.x += (target.x - now.x) * 0.06;
-            now.y += (target.y - now.y) * 0.06;
-            stage.style.setProperty('--mx', now.x.toFixed(4));
-            stage.style.setProperty('--my', now.y.toFixed(4));
-            running = Math.abs(target.x - now.x) + Math.abs(target.y - now.y) > 0.001;
-            if (running) requestAnimationFrame(tick);
-        };
-        $('empty-state').addEventListener('mousemove', e => {
-            const r = stage.getBoundingClientRect();
-            target.x = ((e.clientX - r.left) / r.width - 0.5) * 2;
-            target.y = ((e.clientY - r.top) / r.height - 0.5) * 2;
-            if (!running) { running = true; requestAnimationFrame(tick); }
-        });
-    },
 };
 
+// ── Notes on hover ─────────────────────────────────────────────────────────
+// The browser's own tooltips (title="…") are replaced by the site's: dark,
+// small, with a line of pixels at their base. Shown after a short pause,
+// gone on press, scroll or leave. Touch screens keep none (no hover).
+const Tip = (() => {
+    const tip = $('tip'), text = $('tip-text');
+    let target = null, timer = null;
+    const hide = () => { clearTimeout(timer); timer = null; target = null; tip.classList.remove('is-on'); };
+    function place() {
+        if (!target) return;
+        const r = target.getBoundingClientRect();
+        tip.hidden = false;
+        const w = tip.offsetWidth, h = tip.offsetHeight;
+        const above = r.top - h - 8 > 4;
+        const x = Math.min(window.innerWidth - w - 6, Math.max(6, r.left + r.width / 2 - w / 2));
+        tip.style.transform = `translate(${Math.round(x)}px, ${Math.round(above ? r.top - h - 8 : r.bottom + 8)}px)`;
+        tip.classList.add('is-on');
+    }
+    if (window.matchMedia('(hover: hover)').matches) {
+        document.addEventListener('pointerover', e => {
+            const node = e.target.closest?.('[title], [data-tip]');
+            if (!node || node === target) return;
+            if (node.hasAttribute('title')) {   // code may set title again later: always take the latest
+                const v = node.getAttribute('title');
+                node.removeAttribute('title');
+                if (v) node.dataset.tip = v; else delete node.dataset.tip;
+            }
+            if (!node.dataset.tip) return;
+            hide();
+            target = node;
+            text.textContent = node.dataset.tip;
+            timer = setTimeout(place, 380);
+        });
+        document.addEventListener('pointerout', e => { if (target && !target.contains(e.relatedTarget)) hide(); });
+        document.addEventListener('pointerdown', hide, true);
+        window.addEventListener('scroll', hide, { passive: true, capture: true });
+    }
+    return { hide };
+})();
+
+// ── Stars (Flor de Ruina asterisks) ─────────────────────────────────────────
+// Each weight of Flor de Ruina draws its asterisk at another place in its em
+// box: stacked on one origin the wordmark's five stars would jump about, and a
+// menu star would sit off the line. Measure the ink of each glyph (canvas
+// metrics, from its baseline in the page) and shift it so its ink is centred on
+// its box: the wordmark's star thickens in place, the menu stars sit on the row.
+async function alignWordmarkStar() {
+    for (const star of document.querySelectorAll('.wm-star, .star-box')) await alignStar(star);
+}
+async function alignStar(star) {
+    if (!star.getClientRects().length) return;
+    const glyphs = [...star.children];
+    const size = parseFloat(getComputedStyle(glyphs[0]).fontSize);
+    const families = glyphs.map(g => getComputedStyle(g).fontFamily.split(',')[0].trim().replace(/["']/g, ''));
+    await Promise.all(families.map(f => document.fonts.load(`${size}px "${f}"`, '*').catch(() => {})));
+    const ctx = document.createElement('canvas').getContext('2d');
+    const box = star.getBoundingClientRect();
+    const cx = box.left + box.width / 2, cy = box.top + box.height / 2;
+    glyphs.forEach((g, i) => {
+        g.style.transform = '';
+        ctx.font = `${size}px "${families[i]}"`;
+        const m = ctx.measureText('*');
+        // The glyph's line is one em (line-height: 1): the font's ascent and
+        // descent sit centred in it, which gives the baseline.
+        const r = g.getBoundingClientRect();
+        const origin = r.left;
+        const baseline = r.top + (size - (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent)) / 2 + m.fontBoundingBoxAscent;
+        const inkX = origin + (m.actualBoundingBoxRight - m.actualBoundingBoxLeft) / 2;
+        const inkY = baseline + (m.actualBoundingBoxDescent - m.actualBoundingBoxAscent) / 2;
+        g.style.transform = `translate(${((cx - inkX) / size).toFixed(3)}em, ${((cy - inkY) / size).toFixed(3)}em)`;
+    });
+}
+window.addEventListener('resize', () => alignWordmarkStar());
+
+// ── Menu folded behind the logo's star (computer) ───────────────────────────
+// Folded while there is no collection (nothing to show in it yet), open as
+// soon as there is one. The star, the logo's own, folds and unfolds it: open,
+// it stands after "Glane"; folded, it waits alone at the top left. Once the
+// visitor has used it, the menu never changes by itself again.
+const MENU_MS = 420;   // as --t-slow, the sidebar's slide
+const MenuFold = {
+    star: $('menu-star'),
+    touched: false,
+    settled: 0,   // when the running fold or unfold ends
+    get folded() { return document.body.classList.contains('menu-folded'); },
+    set(folded) {
+        if (folded !== this.folded) {
+            document.body.classList.toggle('menu-folded', folded);
+            this.settled = Date.now() + MENU_MS;
+            // The grids and the landing measure their width again once the menu has moved.
+            setTimeout(() => window.dispatchEvent(new Event('resize')), MENU_MS + 20);
+        }
+        this.star.setAttribute('aria-expanded', String(!folded));
+        this.star.dataset.tip = t(folded ? 'menu.show' : 'menu.hide');
+        this.star.setAttribute('aria-label', this.star.dataset.tip);
+    },
+    auto() { if (!this.touched) this.set(!Collections.all().length); },
+    // Open, the star sits where the logo's would: right after "Glane".
+    place() {
+        const brand = document.querySelector('.brand');
+        this.star.style.setProperty('--open-x', `${brand.offsetLeft + brand.offsetWidth}px`);
+        this.star.style.setProperty('--open-y', `${brand.offsetTop}px`);
+    },
+};
+// The logo leads home; already there, a click does nothing (no reload).
+document.querySelector('.brand').addEventListener('click', e => { if (view === 'empty') e.preventDefault(); });
+MenuFold.star.addEventListener('click', () => { MenuFold.touched = true; MenuFold.set(!MenuFold.folded); });
+window.addEventListener('resize', () => MenuFold.place());
+
 // ── Init ────────────────────────────────────────────────────────────────────
-// Reveal the page once both Junicode faces are ready (at most 3 s on a slow network).
+// Reveal the page once Junicode and the title face are ready (at most 3 s on a slow network).
 Promise.race([
-    Promise.all(['400 1em Junicode', 'italic 400 1em Junicode', '600 1em Junicode'].map(f => document.fonts.load(f))),
+    Promise.all(['400 1em Junicode', 'italic 400 1em Junicode', '600 1em Junicode', '400 1em "Flor Semilla"'].map(f => document.fonts.load(f))),
     new Promise(resolve => setTimeout(resolve, 3000)),
-]).finally(() => document.documentElement.classList.remove('is-booting'));
+]).finally(() => { document.documentElement.classList.remove('is-booting'); MenuFold.place(); Landing.fitTitle(); alignWordmarkStar(); });
 
 applyI18n();
 Collections.load();
