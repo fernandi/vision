@@ -195,12 +195,12 @@ def _lang(request: Request) -> str:
 PAGE_TEXT = {
     "en": {"expired_title": "Link expired", "expired": "This link has expired.",
            "expired_body": "Sign-in links work once and for {minutes} minutes. Ask for a new one from the Glane menu.",
-           "back": "BACK TO GLANE", "title": "Sign in", "heading": "Sign in to Glane",
-           "as": "You are signing in as", "button": "SIGN IN"},
+           "back": "Back to Glane", "title": "Sign in", "heading": "Sign in to Glane",
+           "as": "You are signing in as", "button": "Sign in"},
     "fr": {"expired_title": "Lien expiré", "expired": "Ce lien a expiré.",
            "expired_body": "Les liens de connexion fonctionnent une fois, pendant {minutes} minutes. Demandez-en un nouveau depuis le menu de Glane.",
-           "back": "RETOUR À GLANE", "title": "Connexion", "heading": "Se connecter à Glane",
-           "as": "Vous vous connectez en tant que", "button": "SE CONNECTER"},
+           "back": "Retour à Glane", "title": "Connexion", "heading": "Se connecter à Glane",
+           "as": "Vous vous connectez en tant que", "button": "Se connecter"},
 }
 
 
@@ -210,17 +210,24 @@ def _page(title: str, content: str, lang: str = "en") -> HTMLResponse:
 <title>{html.escape(title)} · Glane</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Ctext x='16' y='23' font-family='Arial' font-weight='700' font-size='20' fill='%23fff' text-anchor='middle'%3EG%3C/text%3E%3C/svg%3E">
 <style>
+/* The site's look: "Glane*" in Flor de Ruina Semilla, text in Junicode, a black
+   button with its top right corner cut, a band of stretched pixels under the card. */
+@font-face {{ font-family: 'Flor Semilla'; src: url('/fonts/FlorDeRuina-Semilla.woff2') format('woff2'); font-display: block; }}
 @font-face {{ font-family: Junicode; src: url('/fonts/JunicodeVF-Roman.woff2') format('woff2'); font-weight: 300 700; }}
 @font-face {{ font-family: Junicode; src: url('/fonts/JunicodeVF-Italic.woff2') format('woff2'); font-weight: 300 700; font-style: italic; }}
 body {{ margin: 0; min-height: 100vh; display: grid; place-items: center; background: #E3E3E3; font-family: Junicode, Georgia, serif; color: #000; }}
-main {{ background: #fff; border-radius: 8px; padding: 2.2rem; width: min(420px, calc(100vw - 2rem)); box-sizing: border-box; animation: in .5s cubic-bezier(.16,1,.3,1) both; }}
+main {{ position: relative; overflow: hidden; background: #fff; border-radius: 2px; padding: 2.2rem 2.2rem 2.6rem; width: min(420px, calc(100vw - 2rem)); box-sizing: border-box; animation: in .5s cubic-bezier(.16,1,.3,1) both; }}
+main::after {{ content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 6px; background: url('/mail-band.png') 0 0 / 100% 100% no-repeat; }}
 @keyframes in {{ from {{ opacity: 0; transform: translateY(12px); }} }}
-.brand {{ font-size: 1.3rem; letter-spacing: .16em; font-weight: 600; }}
+.brand {{ display: inline-block; font-family: 'Flor Semilla', Junicode, serif; font-size: 2.6rem; line-height: 1; color: #000; text-decoration: none; }}
+.brand span {{ font-size: .5em; vertical-align: top; margin-left: .06em; }}
 h1 {{ font-weight: 400; font-style: italic; font-size: 1.7rem; margin: 1.6rem 0 .6rem; }}
 p {{ color: #555; line-height: 1.5; margin: 0 0 1.4rem; }}
-button, a.btn {{ font: inherit; font-variant-caps: all-small-caps; letter-spacing: .07em; font-weight: 600; font-size: 1.05rem;
-  background: #000; color: #fff; border: 0; border-radius: 999px; padding: .65rem 1.3rem; cursor: pointer; text-decoration: none; display: inline-block; }}
-</style></head><body><main><div class="brand">GLANE</div>{content}</main></body></html>""")
+button, a.btn {{ font-family: 'Flor Semilla', Junicode, serif; font-size: 1.05rem; line-height: 1;
+  background: #000; color: #fff; border: 0; border-radius: 2px; padding: .8rem 1.3rem; cursor: pointer; text-decoration: none; display: inline-block;
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%); }}
+button:hover, a.btn:hover {{ background: #333; }}
+</style></head><body><main><a class="brand" href="/">Glane<span>*</span></a>{content}</main></body></html>""")
 
 
 def _pending_email(token: str) -> Optional[str]:

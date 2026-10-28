@@ -1680,3 +1680,11 @@ html.motion-off body.is-fetching .fetch-filet { animation: none; transform: none
     .picker-item { padding: 0.55rem 0.45rem; }
     .picker-cover { width: 40px; height: 40px; }
 }
+
+/* Phone, first visit: the top bar's menu button (same class, same strokes),
+   alone, exactly where it stands in the bar (measured: 17 px from the top,
+   9 px from the right). app.js, landing-menu. */
+body:not(.no-menu) .landing-menu { display: none !important; }
+@media (max-width: 860px) {
+    body.no-menu .landing-menu { position: fixed; z-index: 120; top: 17.3px; right: 9px; margin: 0; }
+}

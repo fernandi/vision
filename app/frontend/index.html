@@ -9,7 +9,7 @@
     <link rel="preload" href="fonts/JunicodeVF-Roman.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="fonts/JunicodeVF-Italic.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="fonts/FlorDeRuina-Semilla.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="style.css?v=34">
+    <link rel="stylesheet" href="style.css?v=35">
     <!-- Hide the page until Junicode has loaded (revealed by app.js); without JS nothing is hidden. -->
     <script>document.documentElement.classList.add('is-booting');</script>
 </head>
@@ -211,6 +211,8 @@
 
         <section id="empty-state" class="landing is-loading" aria-label="Welcome to Glane" data-i18n-aria="landing.aria">
             <div id="landing-field" class="landing-field"></div>
+            <!-- Phone, first visit (no top bar): a quiet way to the menu, e.g. to sign in from a new device. -->
+            <button type="button" id="landing-menu" class="menu-btn landing-menu" aria-label="Menu" aria-expanded="false"><span></span><span></span></button>
             <header class="landing-head">
                 <h1 class="wordmark" aria-label="Glane">
                     <span aria-hidden="true">Glane</span><span class="wm-star" aria-hidden="true"><i>*</i><i>*</i><i>*</i><i>*</i><i>*</i></span>
@@ -296,10 +298,10 @@
         <button type="button" id="toast-action" class="toast-action" hidden></button>
     </div>
 
-    <script src="filets.js?v=34"></script>
-    <script src="i18n.js?v=34"></script>
-    <script src="app.js?v=34"></script>
-    <script src="weather.js?v=34"></script>
+    <script src="filets.js?v=35"></script>
+    <script src="i18n.js?v=35"></script>
+    <script src="app.js?v=35"></script>
+    <script src="weather.js?v=35"></script>
 </body>
 
 </html>

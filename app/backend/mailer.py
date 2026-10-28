@@ -32,7 +32,7 @@ MAIL_TEXT = {
         "ignore": "If you did not ask for it, you can ignore this email.",
         "title": "Your sign-in link",
         "lead": "Click the button below to sign in. It works once and expires in {minutes} minutes.",
-        "button": "SIGN IN TO GLANE",
+        "button": "Sign in to Glane",
         "footer": "If you did not ask for this link, you can ignore this email.",
     },
     "fr": {
@@ -42,7 +42,7 @@ MAIL_TEXT = {
         "ignore": "Si vous n’avez rien demandé, vous pouvez ignorer cet email.",
         "title": "Votre lien de connexion",
         "lead": "Cliquez sur le bouton ci-dessous pour vous connecter. Il fonctionne une fois et expire dans {minutes} minutes.",
-        "button": "SE CONNECTER À GLANE",
+        "button": "Se connecter à Glane",
         "footer": "Si vous n’avez pas demandé ce lien, vous pouvez ignorer cet email.",
     },
 }
@@ -52,15 +52,31 @@ def _render(link: str, minutes: int, lang: str = "en"):
     m = {k: v.format(minutes=minutes) for k, v in MAIL_TEXT.get(lang, MAIL_TEXT["en"]).items()}
     text = f"{m['hello']}\n\n{m['intro']}\n\n{link}\n\n{m['ignore']}\n"
     safe = html.escape(link, quote=True)
-    body = f"""<!doctype html><html lang="{lang}"><body style="margin:0;padding:32px 16px;background:#E3E3E3;font-family:Georgia,'Times New Roman',serif;color:#000">
+    # The site's look: "Glane" in Flor de Ruina Semilla (mail apps that refuse web
+    # fonts fall back to Georgia), text in Junicode, a black button with square
+    # corners, and at the foot of the card a band of stretched pixels (an image:
+    # CSS backgrounds are not reliable in mail). Fonts and band come from the site.
+    base = html.escape(link.split("/auth/")[0], quote=True)
+    serif = "Junicode,Georgia,'Times New Roman',serif"
+    title = "'Flor Semilla',Georgia,'Times New Roman',serif"
+    body = f"""<!doctype html><html lang="{lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+@font-face {{ font-family: 'Flor Semilla'; src: url('{base}/fonts/FlorDeRuina-Semilla.woff2') format('woff2'); }}
+@font-face {{ font-family: Junicode; src: url('{base}/fonts/JunicodeVF-Roman.woff2') format('woff2'); font-weight: 300 700; }}
+@font-face {{ font-family: Junicode; src: url('{base}/fonts/JunicodeVF-Italic.woff2') format('woff2'); font-weight: 300 700; font-style: italic; }}
+</style></head>
+<body style="margin:0;padding:32px 16px;background:#E3E3E3;font-family:{serif};color:#000">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
-<table role="presentation" width="100%" style="max-width:480px;background:#fff;border-radius:6px" cellpadding="0" cellspacing="0"><tr><td style="padding:32px">
-<div style="font-size:20px;letter-spacing:4px">GLANE</div>
-<p style="font-size:22px;font-style:italic;margin:28px 0 12px">{m['title']}</p>
-<p style="font-size:15px;line-height:1.5;color:#444;margin:0 0 24px">{m['lead']}</p>
-<a href="{safe}" style="display:inline-block;background:#000;color:#fff;text-decoration:none;font-size:14px;letter-spacing:1px;padding:12px 22px;border-radius:999px">{m['button']}</a>
-<p style="font-size:13px;line-height:1.5;color:#737373;margin:28px 0 0">{m['footer']}</p>
-</td></tr></table></td></tr></table></body></html>"""
+<table role="presentation" width="100%" style="max-width:480px;background:#fff;border-radius:2px;border-collapse:separate;overflow:hidden" cellpadding="0" cellspacing="0">
+<tr><td style="padding:32px 32px 28px">
+<div style="font-family:{title};font-size:40px;line-height:1;color:#000">Glane<span style="font-size:20px;vertical-align:top">*</span></div>
+<p style="font-family:{serif};font-size:23px;font-style:italic;margin:30px 0 10px">{m['title']}</p>
+<p style="font-family:{serif};font-size:16px;line-height:1.5;color:#444;margin:0 0 26px">{m['lead']}</p>
+<a href="{safe}" style="display:inline-block;background:#000;color:#fff;text-decoration:none;font-family:{title};font-size:16px;padding:13px 24px;border-radius:2px">{m['button']}</a>
+<p style="font-family:{serif};font-size:13px;line-height:1.5;font-style:italic;color:#737373;margin:30px 0 0">{m['footer']}</p>
+</td></tr>
+<tr><td style="padding:0;line-height:0;font-size:0"><img src="{base}/mail-band.png" width="480" height="6" alt="" style="display:block;width:100%;height:6px;border:0"></td></tr>
+</table></td></tr></table></body></html>"""
     return m["subject"], text, body
 
 

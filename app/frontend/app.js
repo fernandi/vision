@@ -1711,7 +1711,7 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && !picker.hidden) { closePicker(); return; }
     if (dialog.open) return;
     if (lightbox.hidden || !lightbox.classList.contains('is-open')) {
-        if (e.key === 'Escape' && document.body.classList.contains('menu-open')) closeMenu();
+        if (e.key === 'Escape' && document.body.classList.contains('menu-open')) dismissMenu();
         return;
     }
     if (e.key === 'Escape') closeLightbox();
@@ -1857,10 +1857,29 @@ function closeMenu() {
 }
 $('menu-btn').addEventListener('click', () => {
     const open = !document.body.classList.contains('menu-open');
+    if (!open && history.state?.landingMenu) { history.back(); return; }   // opened from the first-visit landing
     document.body.classList.toggle('menu-open', open);
     if (open) requestAnimationFrame(() => alignWordmarkStar());   // the menu's stars, now on screen
     $('menu-btn').setAttribute('aria-expanded', String(open));
 });
+
+// Phone, first visit: the landing has no top bar, only the menu button, at the
+// same place (to sign in from a new device, for instance). It opens the menu as
+// a step of the history: closing it, or going back, without having done
+// anything returns to the first-visit landing (showView puts no-menu back).
+$('landing-menu').addEventListener('click', () => {
+    Nav.push({ view: 'empty', landingMenu: true });
+    document.body.classList.remove('no-menu');
+    document.body.classList.add('menu-open');
+    $('menu-btn').setAttribute('aria-expanded', 'true');
+    window.dispatchEvent(new Event('resize'));   // the landing makes room for the top bar
+    requestAnimationFrame(() => alignWordmarkStar());
+});
+// Closed by the visitor: back to where the menu was opened from.
+function dismissMenu() {
+    if (history.state?.landingMenu) history.back();   // popstate closes it and shows the landing again
+    else closeMenu();
+}
 
 // On narrow screens the sidebar is a top bar whose height varies with chips.
 new ResizeObserver(() => {
