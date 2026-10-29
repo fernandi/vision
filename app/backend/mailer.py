@@ -52,10 +52,10 @@ def _render(link: str, minutes: int, lang: str = "en"):
     m = {k: v.format(minutes=minutes) for k, v in MAIL_TEXT.get(lang, MAIL_TEXT["en"]).items()}
     text = f"{m['hello']}\n\n{m['intro']}\n\n{link}\n\n{m['ignore']}\n"
     safe = html.escape(link, quote=True)
-    # The site's look: "Glane" in Flor de Ruina Semilla (mail apps that refuse web
-    # fonts fall back to Georgia), text in Junicode, a black button with square
+    # The site's look: the "Glane*" logo as an image (most mail apps refuse web
+    # fonts; PNG, as Gmail blocks SVG), text in Junicode, a black button with square
     # corners, and at the foot of the card a band of stretched pixels (an image:
-    # CSS backgrounds are not reliable in mail). Fonts and band come from the site.
+    # CSS backgrounds are not reliable in mail). Fonts and images come from the site.
     base = html.escape(link.split("/auth/")[0], quote=True)
     serif = "Junicode,Georgia,'Times New Roman',serif"
     title = "'Flor Semilla',Georgia,'Times New Roman',serif"
@@ -69,7 +69,7 @@ def _render(link: str, minutes: int, lang: str = "en"):
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
 <table role="presentation" width="100%" style="max-width:480px;background:#fff;border-radius:2px;border-collapse:separate;overflow:hidden" cellpadding="0" cellspacing="0">
 <tr><td style="padding:32px 32px 28px">
-<div style="font-family:{title};font-size:40px;line-height:1;color:#000">Glane<span style="font-size:20px;vertical-align:top">*</span></div>
+<img src="{base}/mail-logo.png" width="127" height="48" alt="Glane*" style="display:block;width:127px;height:48px;border:0;font-family:{title};font-size:40px;color:#000">
 <p style="font-family:{serif};font-size:23px;font-style:italic;margin:30px 0 10px">{m['title']}</p>
 <p style="font-family:{serif};font-size:16px;line-height:1.5;color:#444;margin:0 0 26px">{m['lead']}</p>
 <a href="{safe}" style="display:inline-block;background:#000;color:#fff;text-decoration:none;font-family:{title};font-size:16px;padding:13px 24px;border-radius:2px">{m['button']}</a>
