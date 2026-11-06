@@ -2533,7 +2533,7 @@ window.addEventListener('resize', () => MenuFold.place());
 // ── Init ────────────────────────────────────────────────────────────────────
 // Reveal the page once Junicode and the title face are ready (at most 3 s on a slow network).
 Promise.race([
-    Promise.all(['400 1em Junicode', 'italic 400 1em Junicode', '600 1em Junicode', '400 1em "Flor Semilla"'].map(f => document.fonts.load(f))),
+    Promise.all(['400 1em Junicode', 'italic 400 1em Junicode', '600 1em Junicode', '400 1em "Flor Semilla"', '600 1em "Flor Semilla Small"'].map(f => document.fonts.load(f))),
     new Promise(resolve => setTimeout(resolve, 3000)),
 ]).finally(() => { document.documentElement.classList.remove('is-booting'); MenuFold.place(); Landing.fitTitle(); alignWordmarkStar(); });
 

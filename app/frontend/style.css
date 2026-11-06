@@ -17,13 +17,24 @@
     font-display: swap;
 }
 
-/* Flor de Ruina: Semilla for every text set in it (the logo, the menu
-   headings, the labels) and for the menu's asterisks. The other weights give
-   only their asterisk: Flor for the landing's ornaments, all five for the
-   logo's star. */
+/* Flor de Ruina Semilla, in two files (full character set in both):
+   - 'Flor Semilla' = the original font, untouched, for large text (logo,
+     menu headings, search field, collection title): its lace texture shows.
+   - 'Flor Semilla Small' = the same drawing with every contour of each
+     pixel turned the same way (renamed GlaneRuina, as the OFL asks of a
+     modified version). In the original, two of the four circles of a
+     pixel run the other way and cancel out where they overlap, leaving
+     hairline gaps that macOS renders as grey mush at small sizes.
+   The other weights give only their asterisk: Flor for the landing's
+   ornaments, all five for the logo's star. */
 @font-face {
     font-family: 'Flor Semilla';
     src: url('fonts/FlorDeRuina-Semilla.woff2') format('woff2');
+    font-display: swap;
+}
+@font-face {
+    font-family: 'Flor Semilla Small';
+    src: url('fonts/GlaneRuina-Semilla-Small.woff2') format('woff2');
     font-display: swap;
 }
 @font-face { font-family: 'Star Semilla'; src: url('fonts/FlorDeRuina-Semilla.woff2') format('woff2'); unicode-range: U+002A; font-display: block; }
@@ -43,7 +54,7 @@
     --font: 'Junicode', 'Iowan Old Style', Georgia, serif;
     --font-title: 'Flor Semilla', 'Junicode', Georgia, serif;
     --font-star: 'Flor Star', 'Junicode', serif;
-    --font-label: 'Flor Semilla', 'Junicode', Georgia, serif;   /* every label once set in Junicode small capitals, in sentence case */
+    --font-label: 'Flor Semilla Small', 'Junicode', Georgia, serif;   /* every label once set in Junicode small capitals, in sentence case */
     --bg: #E3E3E3;
     --panel: #FFFFFF;
     --ink: #000000;
@@ -242,7 +253,7 @@ button { cursor: pointer; background: none; border: 0; -webkit-tap-highlight-col
     background: transparent;
     font-size: 1.17rem;
     font-weight: 500;
-    font-family: var(--font-label); font-synthesis: none;
+    font-family: var(--font-title); font-synthesis: none;   /* large: the original drawing */
     padding: 0.25rem 0.1rem;
 }
 #search-input::placeholder { color: var(--faint);transition: opacity var(--t-fast); }
@@ -687,7 +698,7 @@ html.motion-off .wm-star i { animation: none; }
 }
 .landing-search .search-band { height: 4px; }
 .landing-search:focus-within .search-band { height: 6px; }
-.landing-search input { flex: 1; min-width: 0; border: 0; background: none; outline: none; font-size: 1.17rem; font-weight: 500; font-family: var(--font-label); font-synthesis: none; padding: 0.45rem 0; }
+.landing-search input { flex: 1; min-width: 0; border: 0; background: none; outline: none; font-size: 1.17rem; font-weight: 500; font-family: var(--font-title); font-synthesis: none; padding: 0.45rem 0; }
 .landing-search input::placeholder { color: var(--muted); }
 .landing-search-btn {
     flex: none; width: 40px; height: 40px; border-radius: 50%; margin-right: 0.2rem;
