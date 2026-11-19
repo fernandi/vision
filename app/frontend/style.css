@@ -253,7 +253,7 @@ button { cursor: pointer; background: none; border: 0; -webkit-tap-highlight-col
     background: transparent;
     font-size: 1.17rem;
     font-weight: 500;
-    font-family: var(--font-title); font-synthesis: none;   /* large: the original drawing */
+    font-family: var(--font-label); font-synthesis: none;
     padding: 0.25rem 0.1rem;
 }
 #search-input::placeholder { color: var(--faint);transition: opacity var(--t-fast); }
@@ -698,7 +698,7 @@ html.motion-off .wm-star i { animation: none; }
 }
 .landing-search .search-band { height: 4px; }
 .landing-search:focus-within .search-band { height: 6px; }
-.landing-search input { flex: 1; min-width: 0; border: 0; background: none; outline: none; font-size: 1.17rem; font-weight: 500; font-family: var(--font-title); font-synthesis: none; padding: 0.45rem 0; }
+.landing-search input { flex: 1; min-width: 0; border: 0; background: none; outline: none; font-size: 1.17rem; font-weight: 500; font-family: var(--font-label); font-synthesis: none; padding: 0.45rem 0; }
 .landing-search input::placeholder { color: var(--muted); }
 .landing-search-btn {
     flex: none; width: 40px; height: 40px; border-radius: 50%; margin-right: 0.2rem;
